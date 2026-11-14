@@ -1,0 +1,77 @@
+name: gemini-gw
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+concurrency:
+  group: gemini-gw-relay
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  serve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_PROJECT: ${{ secrets.GOOGLE_PROJECT }}
+      LOCAL_KEYS: ${{ secrets.LOCAL_KEYS }}
+      DEFAULT_MODEL: ${{ secrets.DEFAULT_MODEL }}
+      SUBDOMAIN: ${{ secrets.SUBDOMAIN }}
+      BIND: 127.0.0.1
+      PORT: "8080"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: cloudflared (fallback tunnel)
+        run: |
+          curl -fsSL -o /tmp/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x /tmp/cloudflared
+          /tmp/cloudflared --version
+
+      - name: start
+        run: |
+          chmod +x serve.sh
+          nohup ./serve.sh > /tmp/sup.log 2>&1 &
+          for i in $(seq 1 40); do
+            [ -s /tmp/public_url.txt ] && break
+            sleep 5
+          done
+          tail -30 /tmp/sup.log
+          URL=$(cat /tmp/public_url.txt 2>/dev/null || true)
+          echo "PUBLIC_URL=$URL"
+          [ -n "$URL" ] || exit 1
+          for i in $(seq 1 8); do
+            C=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "$URL/healthz" || true)
+            echo "selfcheck $i -> $C"
+            [ "$C" = "200" ] && break
+            sleep 8
+          done
+          curl -sS --max-time 25 "$URL/healthz" || true
+          echo
+          echo "GEMINI_GW_URL=$URL" >> "$GITHUB_ENV"
+
+      - name: publish url
+        if: env.GEMINI_GW_URL != ''
+        run: |
+          printf '%s\n' "$GEMINI_GW_URL" > LIVE_URL.txt
+          curl -sS -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/LIVE_URL.txt" \
+            -d "$(python3 -c 'import base64,json,os,sys;print(json.dumps({"message":"live url","content":base64.b64encode(open("LIVE_URL.txt","rb").read()).decode(),"sha":os.environ.get("SHA","")}))' 2>/dev/null || true)" >/dev/null || true
+          echo "published attempt done"
+          curl -sS -X PUT -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/LIVE_URL.txt" \
+            -d "{\"message\":\"live url\",\"content\":\"$(printf '%s' "$GEMINI_GW_URL" | base64 -w0)\"}" -o /dev/null -w "put=%{http_code}\n"
+
+      - name: idle
+        run: |
+          echo "live: $GEMINI_GW_URL"
+          sleep 20800
