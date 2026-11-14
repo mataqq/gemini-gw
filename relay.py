@@ -486,6 +486,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, onboard_all(tok))
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__gem":
+            try:
+                tok = resolve_client()
+                return self._send(200, gem_api(tok))
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
         if p == "/__models":
             try:
                 tok = resolve_client()
@@ -657,6 +663,40 @@ class Handler(BaseHTTPRequestHandler):
         out["ok"] = ("OK" in out["steps"].get("generate", "")) and bool(p)
         out["models"] = probe_models(tok, p)
         return out
+
+
+GENLANG = "https://generativelanguage.googleapis.com"
+
+
+def _bearer(host, path, tok, payload, timeout=45):
+    try:
+        resp = _http(host + path, data=json.dumps(payload).encode(),
+                     headers={"Content-Type": "application/json",
+                              "Authorization": "Bearer " + tok,
+                              "x-goog-api-client": "gl-node/22.0.0"}, timeout=timeout)
+        return {"c": resp.getcode(), "b": resp.read().decode("utf-8", "replace")[:320].replace("\n", " ")}
+    except urllib.error.HTTPError as e:
+        return {"c": e.code, "b": e.read().decode("utf-8", "replace")[:260].replace("\n", " ")}
+    except Exception as e:
+        return {"c": 0, "b": type(e).__name__ + ": " + str(e)[:90]}
+
+
+def scopes(tok):
+    out = {}
+    r = _bearer("https://oauth2.googleapis.com", "/tokeninfo?access_token=" + tok, tok, {}, timeout=30)
+    out["tokeninfo"] = r
+    return out
+
+
+def gem_api(tok):
+    """Hit the public Gemini API with the same bearer: different quota pool."""
+    out = {"scopes": scopes(tok).get("tokeninfo", {})}
+    payload = {"contents": [{"role": "user", "parts": [{"text": "say: PONG"}]}]}
+    for m in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash"):
+        out["list:" + m] = ""
+        out[m + ":gen"] = _bearer(GENLANG, "/v1beta/models/" + m + ":generateContent", tok, payload)
+    out["listmodels"] = _bearer(GENLANG, "/v1beta/models?pageSize=5", tok, {}, timeout=40)
+    return out
 
 
 LCA_META = {"ideType": "ANTIGRAVITY"}
