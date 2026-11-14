@@ -486,6 +486,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, onboard_all(tok))
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__mx":
+            try:
+                tok = resolve_client()
+                return self._send(200, mx_probe(tok, project(tok)))
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
         if p == "/__gem":
             try:
                 tok = resolve_client()
@@ -663,6 +669,57 @@ class Handler(BaseHTTPRequestHandler):
         out["ok"] = ("OK" in out["steps"].get("generate", "")) and bool(p)
         out["models"] = probe_models(tok, p)
         return out
+
+
+MX_MODEL = "gemini-2.5-flash"
+MX_ALT = "MODEL_PLACEHOLDER_M18"
+MX_REQ = {"contents": [{"role": "user", "parts": [{"text": "say: PONG"}]}]}
+
+
+def mx_variants():
+    import copy
+    v = {}
+    v["plain"] = {"model": MX_MODEL, "project": "P", "request": copy.deepcopy(MX_REQ)}
+    v["reqid"] = {"model": MX_MODEL, "project": "P", "requestId": "req-1",
+                  "request": copy.deepcopy(MX_REQ)}
+    v["session"] = {"model": MX_MODEL, "project": "P",
+                    "request": dict(copy.deepcopy(MX_REQ), sessionId="s-1")}
+    v["meta"] = {"model": MX_MODEL, "project": "P",
+                 "metadata": {"ideType": "ANTIGRAVITY", "pluginType": "ANTIGRAVITY"},
+                 "request": copy.deepcopy(MX_REQ)}
+    v["noproj"] = {"model": MX_MODEL, "request": copy.deepcopy(MX_REQ)}
+    v["placeholder"] = {"model": MX_ALT, "project": "P", "request": copy.deepcopy(MX_REQ)}
+    v["ua"] = {"model": MX_MODEL, "project": "P", "userAgent": "antigravity/1.0.0",
+               "request": copy.deepcopy(MX_REQ)}
+    v["sysinst"] = {"model": MX_MODEL, "project": "P",
+                    "request": dict(copy.deepcopy(MX_REQ),
+                                    systemInstruction={"parts": [{"text": "be brief"}]},
+                                    generationConfig={"maxOutputTokens": 64})}
+    return v
+
+
+MX_HDRS = {
+    "none": None,
+    "cli": {"X-Goog-Api-Client": "gl-python/3.11.0",
+            "User-Agent": "GeminiCLI/0.1.0 (linux; x64)"},
+    "ag": {"X-Goog-Api-Client": "google-genai-sdk/1.0.0 gl-python/3.11.0",
+           "User-Agent": "antigravity/1.0.0"},
+}
+
+
+def mx_probe(tok, proj):
+    out = {}
+    vs = mx_variants()
+    eps = [("gen", "/v1internal:generateContent"),
+           ("sse", "/v1internal:streamGenerateContent?alt=sse")]
+    for htag, host in (("pa", HOSTS[0]), ("daily", HOSTS[1])):
+        for etag, ep in eps:
+            for vtag, body in vs.items():
+                b = json.loads(json.dumps(body).replace('"P"', json.dumps(proj)))
+                hdrs = MX_HDRS["cli"] if vtag == "placeholder" else None
+                r = _call(host, ep, tok, b, headers=hdrs, timeout=35)
+                out["%s|%s|%s" % (htag, etag, vtag)] = r["c"]
+    return out
 
 
 GENLANG = "https://generativelanguage.googleapis.com"
