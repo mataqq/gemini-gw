@@ -29,9 +29,15 @@ https://cdn.jsdelivr.net/gh/mataqq/gemini-gw@main/LIVE_URL.txt
 Base URL 填 `https://xxxx.trycloudflare.com`，客户端会自己拼 `/v1/chat/completions`。
 如果客户端要求填完整路径，就填 `https://xxxx.trycloudflare.com/v1`。
 
-## 3. 现在这条地址已验证可用
+## 3. 怎么确认拿到的地址是好的
 
-当前：`https://hiking-enclosed-purse-mercy.trycloudflare.com`
+浏览器打开 `https://地址/healthz`，看到下面这行就说明网关活着，可以直接用：
+
+```
+{"ok": true, "service": "gemini-relay", "model": "gemini-2.5-flash", "client": "antigravity"}
+```
+
+接口层面也全部实测通过：
 
 - `/healthz` → `{"ok": true, "service": "gemini-relay", "model": "gemini-2.5-flash", "client": "antigravity"}`
 - `/v1/models` → 返回 `gemini-2.5-flash`
