@@ -30,6 +30,11 @@ GEN_PATH = "/v1internal:generateContent"
 STREAM_PATH = "/v1internal:streamGenerateContent?alt=sse"
 UA = "antigravity/1.0.0 (relay-py)"
 
+# Requested model is always tried first; these are the capacity fallbacks.
+FALLBACK = ["gemini-2.5-flash", "gemini-3-flash", "gemini-2.5-flash-thinking",
+            "gemini-3.5-flash-lite"]
+SOFT = (400, 404, 429, 503)   # retry the next model instead of failing the client
+
 CANDIDATES = [
     {"name": "antigravity",
      "client_id": "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
@@ -74,7 +79,9 @@ def load_cfg():
     cfg.setdefault("client_secret", "")
     cfg.setdefault("project", "")
     cfg.setdefault("local_keys", "sk-gw-dev-9527")
-    cfg.setdefault("default_model", "gemini-2.5-pro")
+    cfg.setdefault("default_model", "gemini-2.5-flash")
+    if cfg["default_model"] == "gemini-2.5-pro":
+        cfg["default_model"] = "gemini-2.5-flash"  # pro is capacity-gated on free tier
     cfg.setdefault("upstream", DEFAULT_UPSTREAM)
     if "cloudcode-pa.googleapis.com" in str(cfg.get("upstream", "")) and \
             not str(cfg.get("upstream", "")).split("//")[-1].startswith("daily-"):
@@ -551,22 +558,37 @@ class Handler(BaseHTTPRequestHandler):
         try:
             token = resolve_client()
             proj = project(token)
-            payload = build_payload(model, proj, body)
             if body.get("stream"):
-                return self._stream(token, payload, model)
-            resp = _http(CFG["upstream"] + GEN_PATH, data=json.dumps(payload).encode(),
-                         headers={"Content-Type": "application/json",
-                                  "Authorization": "Bearer " + token}, timeout=180)
-            j = unwrap(_json_or_text(resp))
-            text = pick_text(j)
-            return self._send(200, {
-                "id": "chatcmpl-" + str(int(time.time())),
-                "object": "chat.completion", "created": int(time.time()),
-                "model": model,
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
-                             "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-            })
+                return self._stream(token, proj, body, model)
+            chain = [model] + [m for m in FALLBACK if m != model]
+            last = (0, "")
+            for m in chain:
+                payload = build_payload(m, proj, body)
+                try:
+                    resp = _http(CFG["upstream"] + GEN_PATH, data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "Authorization": "Bearer " + token}, timeout=180)
+                except urllib.error.HTTPError as e:
+                    last = (e.code, e.read().decode("utf-8", "replace"))
+                    if e.code in SOFT:
+                        continue
+                    break
+                j = unwrap(_json_or_text(resp))
+                text = pick_text(j)
+                um = j.get("usageMetadata") or {}
+                return self._send(200, {
+                    "id": "chatcmpl-" + str(int(time.time())),
+                    "object": "chat.completion", "created": int(time.time()),
+                    "model": m,
+                    "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
+                                 "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": um.get("promptTokenCount", 0),
+                              "completion_tokens": um.get("candidatesTokenCount", 0),
+                              "total_tokens": um.get("totalTokenCount", 0)},
+                })
+            return self._send(502, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:400]),
+                                              "type": "upstream_error"},
+                                    "tried": chain})
         except urllib.error.HTTPError as e:
             d = e.read().decode("utf-8", "replace")
             return self._send(502, {"error": {"message": "upstream %s: %s" % (e.code, d[:400]),
@@ -574,12 +596,29 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(502, {"error": {"message": str(e)[:400], "type": "gateway_error"}})
 
-    def _stream(self, token, payload, model):
+    def _stream(self, token, proj, body, model):
         cid = "chatcmpl-" + str(int(time.time()))
-        resp = _http(CFG["upstream"] + STREAM_PATH, data=json.dumps(payload).encode(),
-                     headers={"Content-Type": "application/json",
-                              "Accept": "text/event-stream",
-                              "Authorization": "Bearer " + token}, timeout=180)
+        chain = [model] + [m for m in FALLBACK if m != model]
+        resp, last, used = None, (0, ""), model
+        for m in chain:
+            payload = build_payload(m, proj, body)
+            try:
+                resp = _http(CFG["upstream"] + STREAM_PATH, data=json.dumps(payload).encode(),
+                             headers={"Content-Type": "application/json",
+                                      "Accept": "text/event-stream",
+                                      "Authorization": "Bearer " + token}, timeout=180)
+                used = m
+                break
+            except urllib.error.HTTPError as e:
+                last = (e.code, e.read().decode("utf-8", "replace"))
+                if e.code in SOFT:
+                    continue
+                break
+        if resp is None:
+            return self._send(502, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:300]),
+                                              "type": "upstream_error"},
+                                    "tried": chain})
+        model = used
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
