@@ -49,7 +49,7 @@ try_serveo() {
     U=$(grep -oE 'https://[a-z0-9.-]+\.serveo\.net' /tmp/serveo.log | head -1 || true)
     if [ -n "${U:-}" ] && accept "$U"; then return 0; fi
   done
-  head -25 /tmp/serveo.log 2>/dev/null
+  head -40 /tmp/serveo.log 2>/dev/null > /tmp/serveo_tail.txt
   return 1
 }
 
@@ -84,6 +84,7 @@ try_cloudflare() {
 }
 
 start_relay || exit 1
+: > /tmp/serveo_tail.txt
 
 echo "===== /__diag (local) ====="
 curl -sS --max-time 180 "http://127.0.0.1:${PORT}/__diag" | tee /tmp/diag.json

@@ -46,6 +46,7 @@ def main():
     while True:
         url = read("/tmp/public_url.txt").strip()
         diag = read("/tmp/diag.json").strip()
+        svo = read("/tmp/serveo_tail.txt").strip()
         stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         if url:
             c1, m1 = put("LIVE_URL.txt", url + "\n")
@@ -53,6 +54,9 @@ def main():
         if diag:
             c2, m2 = put("DIAG.json", diag + "\n")
             print("DIAG.json", c2, m2, flush=True)
+        if svo:
+            c3, m3 = put("SERVEO.txt", svo[-4000:] + "\n")
+            print("SERVEO.txt", c3, m3, flush=True)
         if once:
             return
         time.sleep(90)
