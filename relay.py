@@ -447,6 +447,12 @@ class Handler(BaseHTTPRequestHandler):
                                     "model": CFG["default_model"], "client": _TOK["client"]})
         if p == "/__diag":
             return self._send(200, self.diag())
+        if p == "/__probe":
+            try:
+                tok = resolve_client()
+                return self._send(200, deep_probe(tok))
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
         if p == "/v1/models":
             if not self._authed():
                 return self._send(401, {"error": {"message": "invalid api key", "type": "invalid_request_error"}})
@@ -606,6 +612,82 @@ class Handler(BaseHTTPRequestHandler):
         out["ok"] = ("OK" in out["steps"].get("generate", "")) and bool(p)
         out["models"] = probe_models(tok, p)
         return out
+
+
+HOSTS = ["https://cloudcode-pa.googleapis.com",
+         "https://daily-cloudcode-pa.googleapis.com",
+         "https://autopush-cloudcode-pa.googleapis.com"]
+
+
+def _call(host, path, tok, payload, headers=None, timeout=30, method=None):
+    h = {"Content-Type": "application/json", "Authorization": "Bearer " + tok}
+    if headers:
+        h.update(headers)
+    data = b"" if payload is None else json.dumps(payload).encode()
+    try:
+        resp = _http(host + path, data=data, headers=h, timeout=timeout, method=method)
+        raw = resp.read().decode("utf-8", "replace")
+        return {"c": resp.getcode(), "b": raw[:420].replace("\n", " ")}
+    except urllib.error.HTTPError as e:
+        return {"c": e.code, "b": e.read().decode("utf-8", "replace")[:300].replace("\n", " ")}
+    except Exception as e:
+        return {"c": 0, "b": type(e).__name__ + ": " + str(e)[:90]}
+
+
+def deep_probe(tok):
+    """Map every plausible upstream host/endpoint/header to see what answers 429."""
+    out = {"lca": {}, "models": {}, "gen": {}, "hosts": HOSTS}
+    proj = ""
+    for host in HOSTS:
+        tag = host.split("//")[1].split(".")[0]
+        r = _call(host, "/v1internal:loadCodeAssist", tok,
+                  {"metadata": {"pluginType": "GEMINI_CLI", "ideType": "ANTIGRAVITY"}})
+        out["lca"][tag] = r
+        if proj == "" and r["c"] == 200:
+            try:
+                j = json.loads(r["b"].split(" ...")[0]) if False else None
+            except Exception:
+                j = None
+            p = _pick_project(json.loads(_full(host, "/v1internal:loadCodeAssist", tok) or "{}"))
+            if p:
+                proj = p
+                out["project_from"] = tag
+    out["project"] = proj
+    for host in HOSTS:
+        tag = host.split("//")[1].split(".")[0]
+        out["models"][tag + ":fetch"] = _call(host, "/v1internal:fetchAvailableModels", tok,
+                                              {"project": proj})
+        out["models"][tag + ":list"] = _call(host, "/v1internal:listModels", tok,
+                                             {"project": proj})
+    body = build_payload("gemini-2.5-flash", proj,
+                         {"messages": [{"role": "user", "content": "say: PONG"}]})
+    for host in HOSTS:
+        tag = host.split("//")[1].split(".")[0]
+        out["gen"][tag + ":plain"] = _call(host, "/v1internal:generateContent", tok, body, timeout=45)
+        out["gen"][tag + ":cli-hdr"] = _call(
+            host, "/v1internal:generateContent", tok, body, timeout=45,
+            headers={"X-Goog-Api-Client": "gl-python/3.11.0",
+                     "User-Agent": "GeminiCLI/0.1.0 (linux; x64)"})
+        out["gen"][tag + ":stream"] = _call(host, "/v1internal:streamGenerateContent?alt=sse",
+                                            tok, body, timeout=45,
+                                            headers={"Accept": "text/event-stream"})
+    out["gen"]["noproj"] = _call("https://cloudcode-pa.googleapis.com",
+                                 "/v1internal:generateContent", tok,
+                                 build_payload("gemini-2.5-flash", "",
+                                               {"messages": [{"role": "user", "content": "say: PONG"}]}),
+                                 timeout=45)
+    return out
+
+
+def _full(host, path, tok, payload=None):
+    data = b"" if payload is None else json.dumps(payload).encode()
+    try:
+        resp = _http(host + path, data=data,
+                     headers={"Content-Type": "application/json",
+                              "Authorization": "Bearer " + tok}, timeout=30)
+        return resp.read().decode("utf-8", "replace")[:1500]
+    except Exception:
+        return ""
 
 
 PROBE_MODELS = ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash",
