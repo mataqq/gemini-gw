@@ -453,6 +453,33 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, deep_probe(tok))
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__lca":
+            try:
+                tok = resolve_client()
+                out = {"raw": {}, "onboard": {}}
+                metas = [{"pluginType": "GEMINI_CLI"},
+                         {"pluginType": "ANTIGRAVITY", "ideType": "ANTIGRAVITY"},
+                         {"pluginType": "IDE_UNSPECIFIED", "ideType": "ANTIGRAVITY"},
+                         {"ideType": "ANTIGRAVITY"},
+                         {"pluginType": "GEMINI_CLI", "ideType": "GEMINI_CLI"},
+                         {}]
+                for i, m in enumerate(metas):
+                    out["raw"]["v%d" % i] = _full(HOSTS[0], "/v1internal:loadCodeAssist", tok,
+                                                  {"metadata": m}, limit=6000)
+                r = out["raw"].get("v1") or ""
+                try:
+                    tier = (json.loads(r).get("allowedTiers") or [])
+                except Exception:
+                    tier = []
+                for t in tier[:3]:
+                    tid = t.get("id") if isinstance(t, dict) else t
+                    out["onboard"][str(tid)] = _call(
+                        HOSTS[0], "/v1internal:onboardUser", tok,
+                        {"tierId": tid, "metadata": {"pluginType": "ANTIGRAVITY",
+                                                     "ideType": "ANTIGRAVITY"}}, timeout=40)
+                return self._send(200, out)
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
         if p == "/__models":
             try:
                 tok = resolve_client()
