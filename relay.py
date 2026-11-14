@@ -25,7 +25,7 @@ CFG_FILE = os.path.join(HERE, "relay.local.json")
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO = "https://www.googleapis.com/oauth2/v3/userinfo"
-DEFAULT_UPSTREAM = "https://cloudcode-pa.googleapis.com"
+DEFAULT_UPSTREAM = "https://daily-cloudcode-pa.googleapis.com"
 GEN_PATH = "/v1internal:generateContent"
 STREAM_PATH = "/v1internal:streamGenerateContent?alt=sse"
 UA = "antigravity/1.0.0 (relay-py)"
@@ -76,6 +76,9 @@ def load_cfg():
     cfg.setdefault("local_keys", "sk-gw-dev-9527")
     cfg.setdefault("default_model", "gemini-2.5-pro")
     cfg.setdefault("upstream", DEFAULT_UPSTREAM)
+    if "cloudcode-pa.googleapis.com" in str(cfg.get("upstream", "")) and \
+            not str(cfg.get("upstream", "")).split("//")[-1].startswith("daily-"):
+        cfg["upstream"] = DEFAULT_UPSTREAM  # free-tier quota lives on daily-
     cfg.setdefault("proxy", os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or "")
     cfg.setdefault("proxies", [])
     cfg.setdefault("bind", "0.0.0.0")
