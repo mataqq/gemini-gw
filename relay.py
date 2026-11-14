@@ -636,11 +636,19 @@ def model_catalog(tok, proj):
     cat = {}
     for host in HOSTS[:2]:
         tag = host.split("//")[1].split(".")[0]
-        raw = _full(host, "/v1internal:fetchAvailableModels", tok, {"project": proj}, limit=20000)
+        raw = _full(host, "/v1internal:fetchAvailableModels", tok, {"project": proj}, limit=400000)
         try:
             j = json.loads(raw)
         except Exception:
-            cat[tag] = {"error": raw[:200]}
+            # fall back to a regex scan: the ids are enough to call
+            ids2 = [m for m in re.findall(r'"([a-z0-9][a-z0-9.\-]{2,60})":\s*\{', raw)
+                    if any(k in m for k in ("gemini", "claude", "gpt", "flash", "pro"))]
+            seen = []
+            for m in ids2:
+                if m not in seen:
+                    seen.append(m)
+            cat[tag] = {"count": len(seen), "items": [{"id": m} for m in seen],
+                        "note": "regex fallback", "bytes": len(raw)}
             continue
         ms = j.get("models") or j
         items = []
