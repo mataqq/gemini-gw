@@ -407,6 +407,20 @@ def unwrap(obj):
     return obj
 
 
+REC = []
+REC_MAX = 240
+REC_LOCK = threading.Lock()
+
+
+def _rec(d):
+    """ring buffer of request outcomes so phone-side failures can be read remotely"""
+    d["t"] = time.strftime("%H:%M:%SZ", time.gmtime())
+    with REC_LOCK:
+        REC.append(d)
+        if len(REC) > REC_MAX:
+            del REC[0:len(REC) - REC_MAX]
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "gemini-relay/1.0"
@@ -422,6 +436,24 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
 
     def _send(self, code, obj, extra=None):
+        ctx = getattr(self, "_ctx", None)
+        if ctx is not None:
+            msg = ""
+            if isinstance(obj, dict):
+                e = obj.get("error")
+                if isinstance(e, dict):
+                    msg = str(e.get("message", ""))[:150]
+                elif isinstance(e, str):
+                    msg = e[:150]
+                if obj.get("tried"):
+                    ctx["tried"] = list(obj["tried"])[:4]
+            rec = {"path": ctx.get("path"), "model": ctx.get("model"),
+                   "code": code, "ms": int(1000 * (time.time() - ctx.get("t0", time.time()))),
+                   "ua": (self.headers.get("User-Agent") or "")[:60], "err": msg}
+            if ctx.get("tried"):
+                rec["tried"] = ctx["tried"]
+            _rec(rec)
+            self._ctx = None
         body = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -510,6 +542,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, out)
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__rec":
+            with REC_LOCK:
+                items = list(REC)[-140:]
+            return self._send(200, {"count": len(items), "items": items})
         if p == "/__mx":
             try:
                 tok = resolve_client()
@@ -543,8 +579,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         p = urllib.parse.urlparse(self.path).path
-        if p != "/v1/chat/completions":
-            return self._send(404, {"error": {"message": "not found"}})
+        self._ctx = {"path": p, "model": "", "t0": time.time()}
+        # tolerate base-URL doubling (/v1/v1/...) and trailing slashes from mobile clients
+        if not p.rstrip("/").lower().endswith("/chat/completions"):
+            return self._send(404, {"error": {"message": "unknown path " + p,
+                                              "hint": "use /v1/chat/completions"}})
         if not self._authed():
             return self._send(401, {"error": {"message": "invalid api key", "type": "invalid_request_error"}})
         try:
@@ -555,6 +594,8 @@ class Handler(BaseHTTPRequestHandler):
         model = body.get("model") or CFG["default_model"]
         if model.startswith("gemini/"):
             model = model.split("/", 1)[1]
+        self._ctx["model"] = model
+        self._ctx["stream"] = bool(body.get("stream"))
         try:
             token = resolve_client()
             proj = project(token)
@@ -619,6 +660,10 @@ class Handler(BaseHTTPRequestHandler):
                                               "type": "upstream_error"},
                                     "tried": chain})
         model = used
+        ctx = getattr(self, "_ctx", None) or {}
+        self._ctx = None
+        sctx = {"path": ctx.get("path"), "model": model, "t0": ctx.get("t0", time.time()),
+                "ua": (self.headers.get("User-Agent") or "")[:60]}
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -665,6 +710,9 @@ class Handler(BaseHTTPRequestHandler):
                 resp.close()
             except Exception:
                 pass
+            _rec({"path": sctx.get("path"), "model": model, "code": 200, "stream": True,
+                  "ms": int(1000 * (time.time() - sctx.get("t0", time.time())),
+                            ), "ua": sctx.get("ua"), "err": ""})
 
     def diag(self):
         out = {"ok": False, "attempts": [], "steps": {}, "config": {

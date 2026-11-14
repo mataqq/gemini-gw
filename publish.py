@@ -34,6 +34,21 @@ def put(path, text, tmo=25):
     except Exception as e:
         return 0, type(e).__name__ + ": " + str(e)[:80]
 
+def fetch_rec():
+    try:
+        r = urllib.request.urlopen("http://127.0.0.1:8080/__rec", timeout=8)
+        items = json.loads(r.read().decode()).get("items") or []
+    except Exception:
+        return ""
+    bad = [i for i in items if i.get("code") != 200]
+    keep = bad[-40:]
+    tail = items[-25:]
+    summary = {"total": len(items), "bad": len(bad),
+               "codes": sorted({str(i.get("code")) for i in items}),
+               "uagents": sorted({(i.get("ua") or "-")[:40] for i in items})[-6:],
+               "last": tail, "bad_items": keep}
+    return json.dumps(summary, ensure_ascii=False)
+
 def read(p):
     try:
         with open(p, "r", encoding="utf-8") as fh:
@@ -61,6 +76,10 @@ def main():
             if clean:
                 c2, m2 = put("DIAG.json", clean + "\n")
             print("DIAG.json", c2, m2, flush=True)
+        recs = fetch_rec()
+        if recs:
+            c4, m4 = put("REC.json", recs + "\n")
+            print("REC.json", c4, m4, flush=True)
         if svo:
             c3, m3 = put("SERVEO.txt", svo[-4000:] + "\n")
             print("SERVEO.txt", c3, m3, flush=True)
