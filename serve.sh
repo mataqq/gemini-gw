@@ -42,14 +42,14 @@ try_serveo() {
   log "tunnel: serveo subdomain=$SUB"
   nohup ssh -T -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
       -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
-      -o ConnectTimeout=25 \
+      -o ConnectTimeout=25 -o PreferredAuthentications=none \
       -R "${SUB}:80:127.0.0.1:${PORT}" serveo.net >> /tmp/serveo.log 2>&1 &
   for _ in $(seq 1 20); do
     sleep 2
     U=$(grep -oE 'https://[a-z0-9.-]+\.serveo\.net' /tmp/serveo.log | head -1 || true)
     if [ -n "${U:-}" ] && accept "$U"; then return 0; fi
   done
-  head -40 /tmp/serveo.log 2>/dev/null > /tmp/serveo_tail.txt
+  cat /tmp/serveo.log > /tmp/serveo_tail.txt 2>/dev/null || true
   return 1
 }
 
