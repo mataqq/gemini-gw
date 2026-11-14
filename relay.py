@@ -207,26 +207,129 @@ def resolve_client():
                            % (last or {}).get("verdict", "unknown"))
 
 
+_PROJ_DBG = {}
+
+
+def _pick_project(j):
+    """Dig a project id out of any response shape Google may use."""
+    for key in ("cloudaicompanionProject", "project", "projectId", "id"):
+        v = j.get(key) if isinstance(j, dict) else None
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+        if isinstance(v, dict):
+            for k2 in ("id", "name", "projectId"):
+                v2 = v.get(k2)
+                if isinstance(v2, str) and v2.strip():
+                    return v2.strip()
+    return ""
+
+
+def _meta_variants():
+    return [
+        {"pluginType": "GEMINI_CLI"},
+        {"pluginType": "GEMINI_CLI", "ideType": "ANTIGRAVITY", "platform": "PLATFORM_UNSPECIFIED"},
+        {"pluginType": "ANTIGRAVITY"},
+        {"ideType": "ANTIGRAVITY", "pluginType": "IDE_UNSPECIFIED"},
+        {},
+        None,
+    ]
+
+
+def _v1internal(path, token, payload, timeout=25):
+    data = b"" if payload is None else json.dumps(payload).encode()
+    resp = _http(CFG["upstream"] + path, data=data,
+                 headers={"Content-Type": "application/json",
+                          "Authorization": "Bearer " + token}, timeout=timeout)
+    return _json_or_text(resp)
+
+
+def _onboard(token, tier, meta):
+    """Create the backend project if the account has none yet."""
+    payload = {"tierId": tier}
+    if meta is not None:
+        payload["metadata"] = meta
+    j = _v1internal("/v1internal:onboardUser", token, payload, timeout=30)
+    op = j.get("name") if isinstance(j, dict) else None
+    ops = {"tier": tier, "op": op, "done": bool(j.get("done")) if isinstance(j, dict) else None,
+           "raw": (json.dumps(j)[:400] if isinstance(j, dict) else str(j)[:200])}
+    if op and not j.get("done"):
+        for _ in range(12):
+            time.sleep(3)
+            r = _v1internal("/v1internal/operations/" + op.split("/")[-1], token, None, timeout=25)
+            if isinstance(r, dict) and r.get("done"):
+                j = r
+                ops["done"] = True
+                break
+            if isinstance(r, dict) and r.get("error"):
+                ops["error"] = json.dumps(r["error"])[:200]
+                break
+    p = _pick_project(j.get("response", {}) if isinstance(j, dict) else {}) or _pick_project(j or {})
+    ops["project"] = p
+    return p, ops
+
+
 def project(token):
     if CFG["project"]:
         return CFG["project"]
     if _TOK.get("project"):
         return _TOK["project"]
-    body = json.dumps({"metadata": {"pluginType": "GEMINI_CLI"}}).encode()
-    try:
-        resp = _http(CFG["upstream"] + "/v1internal:loadCodeAssist", data=body,
-                     headers={"Content-Type": "application/json",
-                              "Authorization": "Bearer " + token}, timeout=25)
-        j = _json_or_text(resp)
-    except Exception as e:
-        sys.stderr.write("loadCodeAssist failed: %s\n" % e)
+
+    tiers, allowed, lca_ok, last_err = [], [], False, ""
+    for meta in _meta_variants():
+        try:
+            j = _v1internal("/v1internal:loadCodeAssist", token,
+                            None if meta is None else {"metadata": meta}, timeout=25)
+        except Exception as e:
+            last_err = type(e).__name__ + ": " + str(e)[:120]
+            _PROJ_DBG["loadCodeAssist_error"] = last_err
+            continue
+        lca_ok = True
+        _PROJ_DBG["loadCodeAssist"] = json.dumps(j)[:900] if isinstance(j, dict) else str(j)[:400]
+        p = _pick_project(j or {})
+        if p:
+            _TOK["project"] = p
+            _PROJ_DBG["via"] = "loadCodeAssist:" + json.dumps(meta or {})[:60]
+            return p
+        if isinstance(j, dict):
+            cur = j.get("currentTier") or {}
+            if isinstance(cur, dict) and cur.get("id"):
+                tiers.append(cur["id"])
+            for t in (j.get("allowedTiers") or []):
+                if isinstance(t, dict) and t.get("id"):
+                    allowed.append({k: t.get(k) for k in ("id", "name", "isDefault", "userDefinedCloudaicompanionProject")})
+
+    order = []
+    for t in tiers + (["free-tier", "standard-tier", "legacy-tier"] if not allowed else []):
+        if t and t not in order:
+            order.append(t)
+    for a in allowed:
+        tid = a.get("id")
+        if tid and tid not in order and not a.get("userDefinedCloudaicompanionProject"):
+            order.insert(0, tid)
+
+    _PROJ_DBG["currentTier"] = tiers
+    _PROJ_DBG["allowedTiers"] = allowed
+    _PROJ_DBG["onboard_order"] = order[:4]
+    if not lca_ok:
+        _PROJ_DBG["verdict"] = "loadCodeAssist unreachable"
         return ""
-    p = j.get("cloudaicompanionProject", "")
-    if isinstance(p, dict):
-        p = p.get("id", "")
-    if p:
-        _TOK["project"] = p
-    return p
+
+    tries = []
+    for tier in order[:4]:
+        try:
+            p, ops = _onboard(token, tier, {"pluginType": "GEMINI_CLI"})
+        except Exception as e:
+            tries.append({"tier": tier, "error": type(e).__name__ + ": " + str(e)[:100]})
+            continue
+        tries.append(ops)
+        if p:
+            _TOK["project"] = p
+            _PROJ_DBG["via"] = "onboardUser:" + tier
+            _PROJ_DBG["onboard"] = tries
+            return p
+    _PROJ_DBG["onboard"] = tries
+    _PROJ_DBG["verdict"] = "no project after loadCodeAssist + onboardUser"
+    return ""
 
 
 def to_parts(content):
@@ -453,6 +556,9 @@ class Handler(BaseHTTPRequestHandler):
             "project_configured": bool(CFG["project"]),
         }}
         good = None
+        _PROJ_DBG.clear()
+        with _LOCK:
+            _TOK["project"] = None
         for c in candidates():
             r = refresh_with(c)
             out["attempts"].append({"client": c["name"], "client_id": c["client_id"],
@@ -480,6 +586,8 @@ class Handler(BaseHTTPRequestHandler):
         p = project(tok)
         out["project"] = p
         out["steps"]["project"] = "OK " + p if p else "FAIL no cloudaicompanionProject"
+        if not p:
+            out["project_debug"] = dict(_PROJ_DBG)
         payload = build_payload(CFG["default_model"], p,
                                 {"messages": [{"role": "user", "content": "reply with exactly: PONG"}]})
         try:
