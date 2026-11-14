@@ -484,6 +484,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = urllib.parse.urlparse(self.path).path
+        self._ctx = {"path": p, "model": "", "t0": time.time()} if p in ("/healthz", "/v1/models") else None
         if p in ("/", "/healthz"):
             return self._send(200, {"ok": True, "service": "gemini-relay",
                                     "model": CFG["default_model"], "client": _TOK["client"]})

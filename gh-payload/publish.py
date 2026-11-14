@@ -59,12 +59,14 @@ def read(p):
 def main():
     once = "--once" in sys.argv
     while True:
-        url = read("/tmp/public_url.txt").strip()
+        urls = read("/tmp/public_urls.txt").strip() or read("/tmp/public_url.txt").strip()
+        lines = [u.strip() for u in urls.splitlines() if u.strip().startswith("http")]
+        url = "\n".join(lines[:4])
         diag = read("/tmp/diag.json").strip()
         svo = read("/tmp/serveo_tail.txt").strip()
         stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         if url:
-            c1, m1 = put("LIVE_URL.txt", url + "\n")
+            c1, m1 = put("LIVE_URL.txt", url + "\n")  # one host per line, primary first
             print("LIVE_URL.txt", c1, m1, flush=True)
         if diag:
             try:

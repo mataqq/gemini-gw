@@ -101,10 +101,57 @@ done
 [ "$MODE" = none ] && { log "FATAL: no tunnel"; exit 1; }
 
 log "mode=$MODE url=$(cat /tmp/public_url.txt)"
+# ---- second, independent public host (different domain -> survives SNI-level interference) ----
+accept_alt() {
+  if verify_url "$1"; then
+    grep -qxF "$1" /tmp/public_urls.txt 2>/dev/null || printf '%s\n' "$1" >> /tmp/public_urls.txt
+    log "ALT ACCEPTED $1"
+    return 0
+  fi
+  log "reject alt $1"
+  return 1
+}
+
+try_alt_lhr() {
+  pkill -f "localhost.run" >/dev/null 2>&1; sleep 1
+  rm -f /tmp/hr2.log
+  log "alt tunnel: localhost.run"
+  nohup ssh -T -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
+      -o ConnectTimeout=30 -R 80:127.0.0.1:${PORT} nokey@localhost.run >> /tmp/hr2.log 2>&1 &
+  for _ in $(seq 1 22); do
+    sleep 3
+    U=$(grep -oE 'https://[a-z0-9]+[a-z0-9.-]*\.(lhr\.life|localhost\.run)' /tmp/hr2.log | head -1 || true)
+    if [ -n "${U:-}" ] && accept_alt "$U"; then return 0; fi
+  done
+  return 1
+}
+
+: > /tmp/public_urls.txt
+[ -s /tmp/public_url.txt ] && cat /tmp/public_url.txt >> /tmp/public_urls.txt
+try_alt_lhr || log "alt tunnel failed (primary still up)"
+ALT_BEAT=0
 while true; do
   sleep 45
   relay_up || { log "relay down -> restart"; start_relay || log "restart failed"; }
-  [ -s /tmp/public_url.txt ] && verify_url "$(cat /tmp/public_url.txt)" && continue
+  # rewrite the published multi-host list from what is currently verified
+  NEW="$(cat /tmp/public_url.txt 2>/dev/null || true)"
+  if [ -n "$NEW" ] && verify_url "$NEW"; then
+    printf '%s\n' "$NEW" > /tmp/public_urls.new
+    while IFS= read -r U2; do
+      [ -n "$U2" ] || continue
+      [ "$U2" = "$NEW" ] && continue
+      if verify_url "$U2"; then printf '%s\n' "$U2" >> /tmp/public_urls.new; fi
+    done < /tmp/public_urls.txt
+    mv /tmp/public_urls.new /tmp/public_urls.txt
+    ALT_BEAT=$((ALT_BEAT + 1))
+    if [ "$(wc -l < /tmp/public_urls.txt)" -lt 2 ] && [ "$ALT_BEAT" -ge 20 ]; then
+      ALT_BEAT=0
+      try_alt_lhr || log "alt retry failed"
+      [ -s /tmp/public_url.txt ] && cat /tmp/public_url.txt >> /tmp/public_urls.txt
+    fi
+    continue
+  fi
   log "tunnel lost -> re-establish"
   MODE=none
   for attempt in 1 2 3; do

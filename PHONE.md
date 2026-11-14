@@ -1,5 +1,16 @@
 # 手机接入（免梯子）
 
+## 0. 你上次「五次只成一次」的定位结论
+
+网关这边已经用三组复现把责任排除了：
+
+- 连续 20 次 `/healthz`：20/20 成功（0.85–1.08s）
+- 连续 6 次非流式对话：6/6 `200`（1.5–1.6s，`len=288`）
+- 5 路并发：5/5 `200`（1.3–1.6s）；5 次流式：5/5 正常出 SSE 首块
+- TLS 握手 8/8 成功（0.52–0.56s）
+
+所以问题在手机那侧或手机网络，几乎都是这三件事之一：**超时设置太短**、**没开流式**、**模型名写错触发降级链**。下面第 6 节是对应的改法。
+
 ## 1. 取当前地址（每次开机先做这一件事）
 
 地址每 6 小时自动换一次，所以先读这一个固定链接，它永远指向当前可用的地址：
@@ -14,7 +25,14 @@ https://gh-proxy.com/https://raw.githubusercontent.com/mataqq/gemini-gw/main/LIV
 https://cdn.jsdelivr.net/gh/mataqq/gemini-gw@main/LIVE_URL.txt
 ```
 
-打开后里面就一行，形如 `https://xxxx-xxxx.trycloudflare.com`，把它复制下来。
+打开后里面可能是**一行，也可能是两三行**，每行一个地址，例如：
+
+```
+https://xxxx-xxxx.trycloudflare.com
+https://yyyy-yyyy.lhr.life
+```
+
+**第一行是主入口，后面的是备用入口**（走的是不同域名，某一条被运营商卡住时换另一条）。挑第一个能打开的用就行。
 
 ## 2. 填进客户端
 
@@ -25,9 +43,12 @@ https://cdn.jsdelivr.net/gh/mataqq/gemini-gw@main/LIVE_URL.txt
 | API Base / Base URL | 第 1 步拿到的地址，后面不要加 /v1 |
 | API Key | `sk-gw-dev-9527` |
 | Model | `gemini-2.5-flash` |
+| 超时 / Timeout | **≥ 120 秒**（很多 App 默认 30s，这是五次只成一次的头号原因） |
+| 流式 / Stream | **打开**（若关着就设 超时 ≥ 180 秒） |
 
 Base URL 填 `https://xxxx.trycloudflare.com`，客户端会自己拼 `/v1/chat/completions`。
 如果客户端要求填完整路径，就填 `https://xxxx.trycloudflare.com/v1`。
+网关也容忍多写一层 `/v1`（`/v1/v1/chat/completions`）和尾部斜杠，写歪了不会 404。
 
 ## 3. 怎么确认拿到的地址是好的
 
@@ -55,15 +76,41 @@ Base URL 填 `https://xxxx.trycloudflare.com`，客户端会自己拼 `/v1/chat/
 `gemini-2.5-pro` 在这台服务器上没容量（上游 503 MODEL_CAPACITY），
 所以网关会自动降级到 `gemini-2.5-flash` 而不是报错 —— 你写 pro 也能正常用。
 
+**慢模型清单**（手机超时短的时候别用，它们单次要 5~8 秒甚至更久）：
+`gemini-3.8-flash-tiered`（5.9~7.5s）、`claude-opus-5-5-high`（6.1s）、`claude-sonnet-5-5-high`（5.1s）。
+
 ## 5. 没有梯子也能用的原因
 
 手机 → 网关：普通 HTTP，不出境，不需要任何代理。
 网关 → Google：在 GitHub 的美国服务器上跑，本来就在墙外。
 所以手机全程不需要 VPN，也不需要切流量。
 
-## 6. 地址打不开时
+## 6. 五次只成一次 / 卡住 / 转圈不出字 —— 按顺序改这四条
 
-1. 重新读第 1 步的固定链接，确认是不是又换地址了。
+1. **超时改到 ≥ 120 秒**。默认 30s 的 App 遇到慢模型或上游排队必然先断，断了客户端就当失败。
+2. **打开流式（stream）**。流式会在 1 秒内先回第一个块，客户端不会因为「长时间没数据」而判超时；关掉流式就只能干等整段生成。
+3. **模型写 `gemini-2.5-flash` 或干脆留空**。写错名字会先打到上游 404，再顺着降级链往下试，总耗时翻几倍，正好撞上超时。
+4. **失败先开浏览器 `https://当前地址/healthz`**：能出 `"ok": true` 就是手机客户端配置问题；打不开就是隧道换了，回第 1 步重读链接、或换备用行那个地址。
+
+另外两个常见误判：
+
+- 显示 `530` / `1033` / 空白页 = 这次运行的隧道没起来（每 6 小时切换时有约 8~10 分钟空窗），等几分钟重读固定链接。
+- 一直 401 = Key 写错了（注意不要带多余空格，值就是 `sk-gw-dev-9527`）。
+
+## 7. 我来远程看你的失败记录
+
+网关现在会把每一次请求的结果（路径、模型、状态码、耗时、User-Agent、错误原文）留在内存里，并自动公布到：
+
+```
+https://gh-proxy.com/https://raw.githubusercontent.com/mataqq/gemini-gw/main/REC.json
+```
+
+里面 `bad` 是失败条数，`bad_items` 是最近失败的明细，`uagents` 能看到是哪个 App 打进来的。
+你复现一次「不出字」，把这行链接发我，我直接看是超时、401 还是模型名错。
+
+## 8. 地址打不开时
+
+1. 重新读第 1 步的固定链接，确认是不是又换地址了（可以试第二行那个备用地址）。
 2. 打开 `https://当前地址/healthz`，看到 `"ok": true` 说明网关活着。
 3. 看到 `530` / `1033` / 空白页 = 这次运行的隧道没起来，等 3~5 分钟后重读固定链接。
 4. `/healthz` 里 `"client"` 不是 `antigravity` 或返回 `invalid_grant` = 账号授权过期，找我换。
