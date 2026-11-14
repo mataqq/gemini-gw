@@ -453,6 +453,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, deep_probe(tok))
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__models":
+            try:
+                tok = resolve_client()
+                return self._send(200, model_catalog(tok, project(tok)))
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
+        if p == "/__gen":
+            try:
+                tok = resolve_client()
+                return self._send(200, gen_matrix(tok, project(tok)))
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
         if p == "/v1/models":
             if not self._authed():
                 return self._send(401, {"error": {"message": "invalid api key", "type": "invalid_request_error"}})
@@ -614,6 +626,58 @@ class Handler(BaseHTTPRequestHandler):
         return out
 
 
+def _raw_gen(host, tok, model, proj, headers=None, timeout=50):
+    body = build_payload(model, proj, {"messages": [{"role": "user", "content": "say: PONG"}]})
+    return _call(host, "/v1internal:generateContent", tok, body, headers=headers, timeout=timeout)
+
+
+def model_catalog(tok, proj):
+    """Compact view of what the account can actually call, with live quota."""
+    cat = {}
+    for host in HOSTS[:2]:
+        tag = host.split("//")[1].split(".")[0]
+        raw = _full(host, "/v1internal:fetchAvailableModels", tok, {"project": proj}, limit=20000)
+        try:
+            j = json.loads(raw)
+        except Exception:
+            cat[tag] = {"error": raw[:200]}
+            continue
+        ms = j.get("models") or j
+        items = []
+        if isinstance(ms, dict):
+            for mid, m in ms.items():
+                if not isinstance(m, dict):
+                    continue
+                qi = m.get("quotaInfo") or {}
+                items.append({"id": mid, "name": m.get("displayName"),
+                              "frac": qi.get("remainingFraction"), "prov": m.get("apiProvider"),
+                              "rec": bool(m.get("recommended"))})
+        elif isinstance(ms, list):
+            for m in ms:
+                if isinstance(m, dict):
+                    qi = m.get("quotaInfo") or {}
+                    items.append({"id": m.get("id") or m.get("model"), "name": m.get("displayName"),
+                                  "frac": qi.get("remainingFraction"), "prov": m.get("apiProvider")})
+        cat[tag] = {"count": len(items), "items": items}
+    return cat
+
+
+def gen_matrix(tok, proj):
+    """Try every advertised model id exactly once and report the verdict."""
+    res = {}
+    cat = model_catalog(tok, proj)
+    ids = []
+    for tag in ("daily-cloudcode-pa", "cloudcode-pa"):
+        for it in (cat.get(tag, {}).get("items") or []):
+            if it.get("id") and it["id"] not in ids:
+                ids.append(it["id"])
+    for mid in ids[:14]:
+        host = HOSTS[1] if "gemini" in mid else HOSTS[0]
+        r = _raw_gen(host, tok, mid, proj, timeout=45)
+        res[mid] = {"c": r["c"], "b": r["b"][:200]}
+    return {"ids": ids, "results": res}
+
+
 HOSTS = ["https://cloudcode-pa.googleapis.com",
          "https://daily-cloudcode-pa.googleapis.com",
          "https://autopush-cloudcode-pa.googleapis.com"]
@@ -679,13 +743,13 @@ def deep_probe(tok):
     return out
 
 
-def _full(host, path, tok, payload=None):
+def _full(host, path, tok, payload=None, limit=1500):
     data = b"" if payload is None else json.dumps(payload).encode()
     try:
         resp = _http(host + path, data=data,
                      headers={"Content-Type": "application/json",
                               "Authorization": "Bearer " + tok}, timeout=30)
-        return resp.read().decode("utf-8", "replace")[:1500]
+        return resp.read().decode("utf-8", "replace")[:limit]
     except Exception:
         return ""
 
