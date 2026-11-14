@@ -9,16 +9,17 @@ on:
 
 concurrency:
   group: gw-relay
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   serve:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
+      GITHUB_TOKEN: ${{ github.token }}
       GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_PROJECT: ${{ secrets.GOOGLE_PROJECT }}
@@ -36,31 +37,18 @@ jobs:
           chmod +x /tmp/cloudflared
           /tmp/cloudflared --version
 
-      - name: relay and tunnel
+      - name: start
         run: |
           chmod +x serve.sh
           nohup ./serve.sh > /tmp/sup.log 2>&1 &
-          for i in $(seq 1 40); do [ -s /tmp/public_url.txt ] && break; sleep 5; done
+          nohup python3 -u publish.py > /tmp/pub.log 2>&1 &
+          for i in $(seq 1 60); do [ -s /tmp/public_url.txt ] && break; sleep 5; done
           echo "::group::supervisor"
-          tail -40 /tmp/sup.log
+          tail -n 50 /tmp/sup.log
           echo "::endgroup::"
           URL=$(cat /tmp/public_url.txt 2>/dev/null || true)
           echo "PUBLIC_URL=$URL"
-          if [ -z "$URL" ]; then echo "NO_PUBLIC_URL"; exit 1; fi
-          for i in $(seq 1 8); do
-            C=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "$URL/healthz" || true)
-            echo "selfcheck $i -> $C"
-            [ "$C" = "200" ] && break
-            sleep 8
-          done
-          echo "::group::healthz"
-          curl -sS --max-time 25 "$URL/healthz" || true
-          echo
-          echo "::endgroup::"
-          echo "::group::diag"
-          curl -sS --max-time 150 "$URL/__diag" || true
-          echo
-          echo "::endgroup::"
+          [ -n "$URL" ] || { echo "NO_PUBLIC_URL"; exit 1; }
           echo "GW_URL=$URL" >> "$GITHUB_ENV"
 
       - name: idle
