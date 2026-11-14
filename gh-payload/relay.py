@@ -639,9 +639,57 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(502, {"error": {"message": str(e)[:400], "type": "gateway_error"}})
 
     def _stream(self, token, proj, body, model):
+        # Commit to SSE immediately: mobile clients abort on "no bytes yet", and the
+        # upstream can hold its first token for several seconds on slow models.
         cid = "chatcmpl-" + str(int(time.time()))
         chain = [model] + [m for m in FALLBACK if m != model]
-        resp, last, used = None, (0, ""), model
+        ctx = getattr(self, "_ctx", None) or {}
+        self._ctx = None
+        sctx = {"path": ctx.get("path"), "model": model, "t0": ctx.get("t0", time.time()),
+                "ua": (self.headers.get("User-Agent") or "")[:60]}
+        used = model
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-transform")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Connection", "close")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.close_connection = True
+
+        wlock = threading.Lock()
+
+        def emit(obj):
+            with wlock:
+                self.wfile.write(("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode())
+                self.wfile.flush()
+
+        def chunk(delta, finish=None):
+            return {"id": cid, "object": "chat.completion.chunk", "created": int(time.time()),
+                    "model": used,
+                    "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+
+        # first byte now (~0.1s), well before upstream answers
+        try:
+            emit(chunk({"role": "assistant", "content": ""}))
+        except Exception:
+            return _rec({"path": sctx.get("path"), "model": model, "code": 499, "stream": True,
+                         "ms": int(1000 * (time.time() - sctx.get("t0")), ), "ua": sctx.get("ua"),
+                         "err": "client gone before first byte"})
+
+        # keep bytes flowing while upstream thinks, so mobile stacks do not time out on silence
+        hb_stop = threading.Event()
+
+        def heartbeat():
+            while not hb_stop.wait(3.0):
+                try:
+                    emit(chunk({"content": ""}))
+                except Exception:
+                    return
+
+        threading.Thread(target=heartbeat, daemon=True).start()
+
+        resp, last = None, (0, "")
         for m in chain:
             payload = build_payload(m, proj, body)
             try:
@@ -656,34 +704,25 @@ class Handler(BaseHTTPRequestHandler):
                 if e.code in SOFT:
                     continue
                 break
+            except Exception as e:
+                last = (0, type(e).__name__ + ": " + str(e)[:120])
+                continue
+
         if resp is None:
-            return self._send(502, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:300]),
-                                              "type": "upstream_error"},
-                                    "tried": chain})
-        model = used
-        ctx = getattr(self, "_ctx", None) or {}
-        self._ctx = None
-        sctx = {"path": ctx.get("path"), "model": model, "t0": ctx.get("t0", time.time()),
-                "ua": (self.headers.get("User-Agent") or "")[:60]}
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "close")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.close_connection = True
-
-        def emit(obj):
-            self.wfile.write(("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode())
-            self.wfile.flush()
-
-        def chunk(delta, finish=None):
-            return {"id": cid, "object": "chat.completion.chunk", "created": int(time.time()),
-                    "model": model,
-                    "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+            # headers already sent -> report the failure in-band instead of a 502
+            try:
+                emit(chunk({"content": "[relay-error] upstream %s %s" % (last[0], last[1][:160])}))
+                emit(chunk({}, "stop"))
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+            except Exception:
+                pass
+            return _rec({"path": sctx.get("path"), "model": model, "code": 502, "stream": True,
+                         "ms": int(1000 * (time.time() - sctx.get("t0"))), "ua": sctx.get("ua"),
+                         "err": ("upstream %s %s" % (last[0], last[1][:150])),
+                         "tried": chain})
 
         try:
-            emit(chunk({"role": "assistant", "content": ""}))
             for raw in resp:
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
@@ -707,13 +746,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         finally:
+            hb_stop.set()
             try:
                 resp.close()
             except Exception:
                 pass
-            _rec({"path": sctx.get("path"), "model": model, "code": 200, "stream": True,
-                  "ms": int(1000 * (time.time() - sctx.get("t0", time.time())),
-                            ), "ua": sctx.get("ua"), "err": ""})
+            _rec({"path": sctx.get("path"), "model": used, "code": 200, "stream": True,
+                  "ms": int(1000 * (time.time() - sctx.get("t0", time.time()))),
+                  "ua": sctx.get("ua"), "err": "" if used == model else "fallback->" + used})
 
     def diag(self):
         out = {"ok": False, "attempts": [], "steps": {}, "config": {
