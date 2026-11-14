@@ -52,7 +52,14 @@ def main():
             c1, m1 = put("LIVE_URL.txt", url + "\n")
             print("LIVE_URL.txt", c1, m1, flush=True)
         if diag:
-            c2, m2 = put("DIAG.json", diag + "\n")
+            try:
+                clean = json.dumps({k: v for k, v in json.loads(diag).items()
+                                    if k in ("ok", "client", "steps", "project")},
+                                   ensure_ascii=False)
+            except Exception:
+                clean = ""
+            if clean:
+                c2, m2 = put("DIAG.json", clean + "\n")
             print("DIAG.json", c2, m2, flush=True)
         if svo:
             c3, m3 = put("SERVEO.txt", svo[-4000:] + "\n")
