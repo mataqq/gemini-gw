@@ -604,7 +604,35 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             out["steps"]["generate"] = "FAIL " + str(e)[:160]
         out["ok"] = ("OK" in out["steps"].get("generate", "")) and bool(p)
+        out["models"] = probe_models(tok, p)
         return out
+
+
+PROBE_MODELS = ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash",
+                "gemini-2.0-flash", "gemini-2.5-flash-lite"]
+
+
+def _one_gen(tok, proj, model, timeout=60):
+    payload = build_payload(model, proj,
+                            {"messages": [{"role": "user", "content": "say: PONG"}]})
+    try:
+        resp = _http(CFG["upstream"] + GEN_PATH, data=json.dumps(payload).encode(),
+                     headers={"Content-Type": "application/json",
+                              "Authorization": "Bearer " + tok}, timeout=timeout)
+        j = unwrap(_json_or_text(resp))
+        return "OK " + repr(pick_text(j)[:40])
+    except urllib.error.HTTPError as e:
+        d = e.read().decode("utf-8", "replace")
+        return "HTTP %s %s" % (e.code, d[:120].replace("\n", " "))
+    except Exception as e:
+        return "FAIL " + type(e).__name__ + ": " + str(e)[:80]
+
+
+def probe_models(tok, proj):
+    res = {}
+    for m in PROBE_MODELS:
+        res[m] = _one_gen(tok, proj, m)
+    return res
 
 
 def main():
