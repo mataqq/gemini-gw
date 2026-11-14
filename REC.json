@@ -1,1 +1,1 @@
-{"total": 1, "bad": 0, "codes": ["200"], "uagents": ["curl/8.18.0"], "last": [{"path": "/healthz", "model": "", "code": 200, "ms": 0, "ua": "curl/8.18.0", "err": "", "t": "18:47:40Z"}], "bad_items": []}
+{"total": 2, "bad": 0, "codes": ["200"], "uagents": ["curl/8.18.0"], "last": [{"path": "/healthz", "model": "", "code": 200, "ms": 0, "ua": "curl/8.18.0", "err": "", "t": "18:47:40Z"}, {"path": "/healthz", "model": "", "code": 200, "ms": 0, "ua": "curl/8.18.0", "err": "", "t": "18:49:19Z"}], "bad_items": []}
