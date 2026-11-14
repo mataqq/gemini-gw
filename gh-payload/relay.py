@@ -489,6 +489,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, onboard_all(tok))
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__one":
+            try:
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                ms = qs.get("m") or ["gemini-2.5-pro"]
+                tok = resolve_client()
+                pj = project(tok)
+                out = {}
+                for m in ms:
+                    out[m] = _raw_gen("https://daily-cloudcode-pa.googleapis.com", tok, m, pj, timeout=60)
+                    bb = (out[m].get("b") or "")[:260]
+                    out[m]["b"] = bb.replace("\r", " ").replace("\n", " ")
+                return self._send(200, out)
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
         if p == "/__mx":
             try:
                 tok = resolve_client()
