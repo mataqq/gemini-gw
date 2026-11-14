@@ -480,6 +480,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, out)
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__onb":
+            try:
+                tok = resolve_client()
+                return self._send(200, onboard_all(tok))
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:200]})
         if p == "/__models":
             try:
                 tok = resolve_client()
@@ -651,6 +657,86 @@ class Handler(BaseHTTPRequestHandler):
         out["ok"] = ("OK" in out["steps"].get("generate", "")) and bool(p)
         out["models"] = probe_models(tok, p)
         return out
+
+
+LCA_META = {"ideType": "ANTIGRAVITY"}
+
+
+def _lca_raw(tok):
+    body = {"metadata": LCA_META}
+    data = json.dumps(body).encode()
+    try:
+        resp = _http(HOSTS[0] + "/v1internal:loadCodeAssist", data=data,
+                     headers={"Content-Type": "application/json",
+                              "Authorization": "Bearer " + tok}, timeout=40)
+        return resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        return "HTTP%d %s" % (e.code, e.read().decode("utf-8", "replace")[:200])
+    except Exception as e:
+        return "ERR " + str(e)[:120]
+
+
+def _gen_stream(host, tok, body, timeout=50):
+    import urllib.parse as up
+    url = host + "/v1internal:streamGenerateContent?alt=sse"
+    data = json.dumps(body).encode()
+    try:
+        resp = _http(url, data=data,
+                     headers={"Content-Type": "application/json",
+                              "Accept": "text/event-stream",
+                              "Authorization": "Bearer " + tok}, timeout=timeout)
+        raw = resp.read().decode("utf-8", "replace")
+        return {"c": resp.getcode(), "b": raw[:300].replace("\n", "|")}
+    except urllib.error.HTTPError as e:
+        return {"c": e.code, "b": e.read().decode("utf-8", "replace")[:220].replace("\n", " ")}
+    except Exception as e:
+        return {"c": 0, "b": type(e).__name__ + ": " + str(e)[:80]}
+
+
+def onboard_all(tok):
+    out = {"tiers": [], "onboard": {}, "gen": {}}
+    raw = _lca_raw(tok)
+    try:
+        j = json.loads(raw)
+    except Exception:
+        out["lca_bad"] = raw[:220]
+        return out
+    out["currentTier"] = (j.get("currentTier") or {}).get("id")
+    out["paidTier"] = (j.get("paidTier") or {}).get("id")
+    out["project_now"] = _pick_project(j)
+    out["gcpManaged"] = j.get("gcpManaged")
+    out["tiers"] = [t.get("id") for t in (j.get("allowedTiers") or []) if isinstance(t, dict)]
+    cand = ["free-tier", "standard-tier", "legacy-tier"]
+    for tid in cand:
+        r = _call(HOSTS[0], "/v1internal:onboardUser", tok,
+                  {"tierId": tid, "metadata": LCA_META}, timeout=45)
+        rec = {"start": r["c"], "body": r["b"][:200]}
+        proj = ""
+        try:
+            jj = json.loads(r["b"] if r["c"] < 300 else "{}")
+        except Exception:
+            jj = {}
+        proj = _pick_project(jj.get("response") or {}) or _pick_project(jj) or ""
+        if not proj and jj.get("done") is False:
+            name = jj.get("name") or ""
+            for k in range(3):
+                time.sleep(3)
+                rr = _call(HOSTS[0] + "/" if False else "/v1internal/operations/" + name.split("/")[-1],
+                           "GET" if False else "POST", tok, {}, timeout=40)
+                rec["poll%d" % k] = rr
+                try:
+                    jp = json.loads(rr["b"] if rr["c"] < 300 else "{}")
+                except Exception:
+                    jp = {}
+                proj = _pick_project(jp.get("response") or {}) or _pick_project(jp) or ""
+                if proj:
+                    break
+        rec["project"] = proj
+        out["onboard"][tid] = rec
+        if proj:
+            for m in ("gemini-2.5-flash", "claude-sonnet-5-5-medium"):
+                out["gen"][tid + ":" + m] = _raw_gen(HOSTS[0], tok, m, proj, timeout=45)
+    return out
 
 
 def _raw_gen(host, tok, model, proj, headers=None, timeout=50):
