@@ -83,35 +83,51 @@ def tier_of(tok):
     out = {'lca': [], 'meta_used': None, 'project': ''}
     j = None
     for i, m in enumerate(METAS):
-        r = post(CC + '/v1internal:loadCodeAssist', tok, {'metadata': m})
-        out['lca'].append({'v': i, 'code': r.get('_err') or 200, 'b': str(r.get('_body') or '')[:90]})
+        body = ({'metadata': m} if m is not None else {})
+        r = post(CC + '/v1internal:loadCodeAssist', tok, body)
+        out['lca'].append({'v': i, 'meta': (str(m)[:40] if m is not None else 'OMIT_KEY'),
+                           'code': r.get('_err') or 200, 'b': str(r.get('_body') or '')[:90]})
         if not r.get('_err'):
-            j = r; out['meta_used'] = i
-            break
+            j = r
+            out['meta_used'] = i
+            if _proj_of(j.get('response') or j) or j.get('currentTier') or j.get('paidTier'):
+                break
     if j:
-        out['currentTier'] = j.get('currentTier')
-        out['paidTier'] = j.get('paidTier')
-        out['allowedTiers'] = [t.get('id') for t in (j.get('allowedTiers') or []) if isinstance(t, dict)]
-        out['project'] = _proj_of(j)
+        jr = j.get('response') or j
+        out['currentTier'] = jr.get('currentTier')
+        out['paidTier'] = jr.get('paidTier')
+        out['allowedTiers'] = [t.get('id') for t in (jr.get('allowedTiers') or []) if isinstance(t, dict)]
+        out['project'] = _proj_of(jr)
     if not out['project']:
         order = [t.get('id') for t in ((j or {}).get('allowedTiers') or []) if isinstance(t, dict)]
-        order += ['free-tier', 'standard-tier', 'legacy-tier']
+        order += ['standard-tier', 'free-tier', 'legacy-tier']
         seen = []
         for tid in order:
             if not tid or tid in seen:
                 continue
             seen.append(tid)
-            o = post(CC + '/v1internal:onboardUser', tok, {'tierId': tid, 'metadata': {'pluginType': 'GEMINI_CLI'}}, tmo=60)
+            o = post(CC + '/v1internal:onboardUser', tok, {'tierId': tid}, tmo=60)
             out['onb_' + tid] = {'code': o.get('_err') or 200, 'b': str(o.get('_body') or '')[:90]}
             pj = _proj_of(o.get('response') or o)
             if pj:
                 out['project'] = pj; out['onb_via'] = tid
                 break
-    for mid in ('gemini-2.5-flash', 'gemini-2.5-pro'):
-        g = post(DAILY + '/v1internal:generateContent', tok,
-                 {'project': out['project'], 'model': mid,
-                  'request': {'contents': [{'role': 'user', 'parts': [{'text': 'say: PONG'}]}],
-                              'generationConfig': {'maxOutputTokens': 12}}}, tmo=60)
+    if out['project']:
+        f = post(DAILY + '/v1internal:fetchAvailableModels', tok, {'project': out['project']}, tmo=60)
+        if f.get('_err'):
+            out['fetchAvailableModels'] = {'code': f['_err'], 'b': str(f.get('_body'))[:200]}
+        else:
+            fr = f.get('response') or f
+            mm = fr.get('models') or fr
+            ids = list(mm.keys())[:40] if isinstance(mm, dict) else str(mm)[:200]
+            out['fetchAvailableModels'] = {'code': 200, 'models': ids}
+    GENBASE = {'request': {'contents': [{'role': 'user', 'parts': [{'text': 'say: PONG'}]}],
+                           'generationConfig': {'maxOutputTokens': 12}}}
+    for mid in ('gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-pro'):
+        body = dict(GENBASE); body['model'] = mid
+        if out['project']:
+            body = {'project': out['project'], **body}
+        g = post(DAILY + '/v1internal:generateContent', tok, body, tmo=60)
         if g.get('_err'):
             out['gen_' + mid] = {'code': g['_err'], 'b': str(g.get('_body'))[:180]}
         else:
