@@ -27,6 +27,9 @@ CFG_FILE = os.path.join(HERE, "relay.local.json")
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO = "https://www.googleapis.com/oauth2/v3/userinfo"
 DEFAULT_UPSTREAM = "https://daily-cloudcode-pa.googleapis.com"
+PASS_MAP = {"ccp": "https://daily-cloudcode-pa.googleapis.com",
+             "oauth": "https://oauth2.googleapis.com",
+             "gapi": "https://www.googleapis.com"}
 GEN_PATH = "/v1internal:generateContent"
 STREAM_PATH = "/v1internal:streamGenerateContent?alt=sse"
 UA = "antigravity/1.0.0 (relay-py)"
@@ -835,10 +838,48 @@ class Handler(BaseHTTPRequestHandler):
             data = [{"id": m, "object": "model", "owned_by": "google",
                      "created": 1700000000} for m in MODEL_IDS]
             return self._send(200, {"object": "list", "data": data})
+        parts = p.strip("/").split("/", 1)
+        if parts and parts[0] in PASS_MAP:
+            return self._pass(PASS_MAP[parts[0]], "/" + (parts[1] if len(parts) > 1 else ""))
         return self._send(404, {"error": {"message": "not found"}})
+
+    def _pass(self, base, path):
+        q = urllib.parse.urlparse(self.path).query
+        url = base + path + (("?" + q) if q else "")
+        n = int(self.headers.get("Content-Length", "0") or 0)
+        data = self.rfile.read(n) if n else None
+        hdrs = {"Content-Type": self.headers.get("Content-Type", "application/json"),
+                "User-Agent": "gw-pass"}
+        auth = self.headers.get("Authorization")
+        if auth:
+            hdrs["Authorization"] = auth
+        try:
+            resp = _http(url, data=data, headers=hdrs, timeout=300)
+            if isinstance(resp, tuple):
+                code, body = resp[0], resp[1]
+            elif isinstance(resp, (bytes, bytearray)):
+                code, body = 200, bytes(resp)
+            else:
+                code, body = 200, str(resp).encode()
+            body = bytes(body)
+        except urllib.error.HTTPError as e:
+            code, body = e.code, e.read()
+        except Exception as e:
+            code, body = 502, str(e).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except Exception:
+            pass
 
     def do_POST(self):
         p = urllib.parse.urlparse(self.path).path
+        parts = p.strip("/").split("/", 1)
+        if parts and parts[0] in PASS_MAP:
+            return self._pass(PASS_MAP[parts[0]], "/" + (parts[1] if len(parts) > 1 else ""))
         if p != "/v1/chat/completions":
             return self._send(404, {"error": {"message": "not found"}})
         if not self._authed():
