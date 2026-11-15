@@ -1,0 +1,17 @@
+name: rtcheck
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - rtcheck.py
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: identify
+        env:
+          PROBE_RT: ${{ secrets.PROBE_RT }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+        run: python3 rtcheck.py
