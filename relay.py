@@ -15,6 +15,7 @@ import ssl
 import sys
 import time
 import threading
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -531,6 +532,63 @@ def unwrap(obj):
     return obj
 
 
+_ERRS = []
+
+
+def _note_err(where):
+    try:
+        tb = traceback.format_exc()
+        _ERRS.append({"where": where, "tb": tb[-900:]})
+        del _ERRS[:-5]
+    except Exception:
+        pass
+
+
+def tb_probe(tok, proj):
+    """Replay the tool-history shapes straight against upstream and return raw bodies."""
+    tools = [{"type": "function", "function": {
+        "name": "read_file",
+        "description": "read a file",
+        "parameters": {"type": "object",
+                       "properties": {"path": {"type": "string"}},
+                       "required": ["path"]}}}]
+    fc = {"id": "c_1", "type": "function",
+          "function": {"name": "read_file",
+                       "arguments": json.dumps({"path": "/etc/hostname"})}}
+    u = {"role": "user", "content": "read /etc/hostname"}
+    a = {"role": "assistant", "content": None, "tool_calls": [fc]}
+    cases = {
+        "tools_only": [u],
+        "fc_only": [u, a],
+        "fc_result": [u, a, {"role": "tool", "tool_call_id": "c_1", "content": "my-host"}],
+    }
+    out = {"upstream": CFG["upstream"], "project": proj, "cases": {}, "errs": list(_ERRS)}
+    for name, hist in cases.items():
+        b = {"model": "gemini-2.5-flash", "tools": tools, "messages": hist}
+        try:
+            payload = build_payload("gemini-2.5-flash", proj, b)
+        except Exception as e:
+            out["cases"][name] = {"build_err": type(e).__name__ + ": " + str(e)[:200]}
+            continue
+        rec = {"payload": json.dumps(payload)[:1200]}
+        t0 = time.time()
+        try:
+            r = _http(CFG["upstream"] + GEN_PATH, data=json.dumps(payload).encode(),
+                      headers={"Content-Type": "application/json",
+                               "Authorization": "Bearer " + tok}, timeout=60)
+            rec["code"] = 200
+            rec["body"] = r.read().decode("utf-8", "replace")[:700]
+        except urllib.error.HTTPError as e:
+            rec["code"] = e.code
+            rec["body"] = e.read().decode("utf-8", "replace")[:700]
+        except Exception as e:
+            rec["code"] = -1
+            rec["err"] = type(e).__name__ + ": " + str(e)[:200]
+        rec["ms"] = int((time.time() - t0) * 1000)
+        out["cases"][name] = rec
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "gemini-relay/1.0"
@@ -634,6 +692,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, out)
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__tb":
+            try:
+                tok = resolve_client()
+                out = tb_probe(tok, project(tok))
+                return self._send(200, out)
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:300], "errs": _ERRS})
         if p == "/__mx":
             try:
                 tok = resolve_client()
@@ -725,6 +790,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(502, {"error": {"message": "upstream %s: %s" % (e.code, d[:400]),
                                               "type": "upstream_error"}})
         except Exception as e:
+            _note_err("do_POST")
             return self._send(502, {"error": {"message": str(e)[:400], "type": "gateway_error"}})
 
     def _stream(self, token, proj, body, model):
@@ -792,6 +858,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         except Exception as e:
+            _note_err("_stream")
             try:
                 emit(chunk({"content": "\n[relay-stream-error] " + str(e)[:200]}))
             except Exception:
