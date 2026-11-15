@@ -16,11 +16,15 @@
   "probe": {
    "loadCodeAssist": {
     "_err": 400,
-    "_body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"ANTIGRAVITY\\\"\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n"
+    "_body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n "
    },
-   "gen_pro": {
-    "_err": 400,
-    "_body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid JSON payload received. Unknown name \\\"contents\\\": Cannot find field.\\nInvalid JSON payload received. Unknown name \\\"generationConfig\\\": Cannot find field.\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"description\""
+   "gen_gemini-2.5-pro": {
+    "code": 403,
+    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you "
+   },
+   "gen_gemini-2.5-flash": {
+    "code": 403,
+    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you "
    }
   }
  },
