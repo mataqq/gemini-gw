@@ -494,8 +494,8 @@ def build_payload(model, proj, body):
             if not fn.get("name"):
                 continue
             a = _args(fn.get("arguments"))
-            txt.append({"functionCall": {"name": fn["name"], "args": a,
-                                         "thoughtSignature": _sig_get(tc.get("id"), fn["name"], a)}})
+            txt.append({"functionCall": {"name": fn["name"], "args": a},
+                        "thoughtSignature": _sig_get(tc.get("id"), fn["name"], a)})
         contents.append({"role": "model" if role == "assistant" else "user", "parts": txt})
     out = {"contents": contents}
     if sys_parts:
@@ -868,7 +868,8 @@ class Handler(BaseHTTPRequestHandler):
                     last = (e.code, e.read().decode("utf-8", "replace"))
                     _LAST.append({"m": m, "code": e.code, "b": last[1][:180]})
                     del _LAST[:-12]
-                    if e.code in SOFT and "thought_signature" not in last[1]:
+                    if (e.code in SOFT and "thought_signature" not in last[1]
+                            and "Invalid JSON payload" not in last[1]):
                         continue
                     break
                 except Exception as e:
@@ -922,7 +923,8 @@ class Handler(BaseHTTPRequestHandler):
                 last = (e.code, e.read().decode("utf-8", "replace"))
                 _LAST.append({"m": m, "code": e.code, "b": last[1][:180], "stream": True})
                 del _LAST[:-12]
-                if e.code in SOFT and "thought_signature" not in last[1]:
+                if (e.code in SOFT and "thought_signature" not in last[1]
+                        and "Invalid JSON payload" not in last[1]):
                     continue
                 break
         if resp is None:
