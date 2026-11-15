@@ -37,6 +37,30 @@
 
 看到 429 或那句 `[relay-retry]` 就等几秒再发，别连点。
 
+### 0.2 工具调用（agentic）已修好（含 Cline / 手机 Agent）
+
+之前「第一轮能出工具调用、第二轮就 502」是上游对 **thought_signature** 的强制校验造成的：
+
+- Gemini 的 `functionCall` 必须带回上一轮响应里下发的 `thoughtSignature`（**放在 part 层的兄弟字段**，不是塞进 `functionCall` 里面）
+- 旧版网关把它丢掉 → 上游回 `400 Function call is missing a thought_signature…` → 整条降级链全 400 → 502
+
+现在的改法（2026-11-15 已上线并实测）：
+
+- 上游下发时按 `tool_call.id` 缓存签名（同时按 `函数名+参数` 兜底），上限 600 条
+- 回放历史时按 id 取回签名并挂在 part 层；取不到就用 `skip_thought_signature_validator` 哨兵（上游同样接受）
+- 空 `thought: true` 片段不再混进正文
+- 撞到 `Invalid JSON payload` / `thought_signature` 属硬错误，不再把整条链打空
+
+实测（`/v1/chat/completions`，3 轮工具循环，流式与非流式各跑一遍）：
+
+```
+r1 -> tool_calls [('list_dir', '{"path": "/etc"}')]
+r2 -> tool_calls [('read_file', '{"path": "/etc/hostname"}')]
+r3 -> FINAL TEXT: '主机名是：cpuniverse-host'
+```
+
+所以 Cline / Antigravity / 任何要「读文件→改文件→再读」的 agent，现在都能正常走完多轮。
+
 ## 1. 取当前地址（每次开机先做这一件事）
 
 地址每 6 小时自动换一次，所以先读这一个固定链接，它永远指向当前可用的地址：
