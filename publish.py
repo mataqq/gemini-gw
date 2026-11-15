@@ -49,6 +49,24 @@ def fetch_rec():
                "last": tail, "bad_items": keep}
     return json.dumps(summary, ensure_ascii=False)
 
+def fetch_err():
+    """Snapshot the relay's in-memory error ring + log tail so chain failures
+    are inspectable without the tunnel."""
+    try:
+        r = urllib.request.urlopen("http://127.0.0.1:8080/__err", timeout=8)
+        d = json.loads(r.read().decode())
+    except Exception:
+        return ""
+    try:
+        with open("/tmp/relay.log", "r", encoding="utf-8", errors="replace") as fh:
+            tail = fh.read()[-4000:]
+    except Exception:
+        tail = ""
+    out = {"last": [str(x)[:400] for x in (d.get("last") or [])[-12:]],
+           "errs": [str(x)[:600] for x in (d.get("errs") or [])[-5:]],
+           "log_tail": tail}
+    return json.dumps(out, ensure_ascii=False)
+
 def read(p):
     try:
         with open(p, "r", encoding="utf-8") as fh:
@@ -82,6 +100,10 @@ def main():
         if recs:
             c4, m4 = put("REC.json", recs + "\n")
             print("REC.json", c4, m4, flush=True)
+        errs = fetch_err()
+        if errs:
+            c5, m5 = put("ERR.txt", errs + "\n")
+            print("ERR.txt", c5, m5, flush=True)
         if svo:
             c3, m3 = put("SERVEO.txt", svo[-4000:] + "\n")
             print("SERVEO.txt", c3, m3, flush=True)
