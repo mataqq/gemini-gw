@@ -1,0 +1,22 @@
+{
+  "rt_present": true,
+  "rt_len": 103,
+  "refresh_antigravity": {
+    "status": 200,
+    "body": "ok"
+  },
+  "client_used": "antigravity",
+  "scope": "email profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/experimentsandconfigs https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid",
+  "aud": "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+  "has_cloud_platform": true,
+  "has_cloudplatformprojects": false,
+  "projects_list": {
+    "status": 403,
+    "body": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Cloud Resource Manager API has not been used in project 1071006060591 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com/overview?project=1071006060591 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\","
+  },
+  "project_create": {
+    "status": 403,
+    "projectId": "gw-7iun71ynm",
+    "body": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Cloud Resource Manager API has not been used in project 1071006060591 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com/overview?project=1071006060591 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\",\n    \"status\": \"PERMISSION_DENIED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"SERVICE_DISABLED\",\n        \"domain\": \"googleapis.com\",\n    "
+  }
+}
