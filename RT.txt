@@ -18,22 +18,22 @@
     {
      "v": 0,
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.inte"
+     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
      "v": 1,
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.inte"
+     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
      "v": 2,
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.inte"
+     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
      "v": 3,
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.inte"
+     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
      "v": 4,
@@ -42,23 +42,31 @@
     }
    ],
    "meta_used": 4,
+   "project": "",
    "currentTier": null,
    "paidTier": null,
    "allowedTiers": [
     "standard-tier"
    ],
-   "onboard_standard-tier": {
+   "onb_standard-tier": {
     "code": 400,
-    "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.google"
+    "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
    },
-   "project": "",
+   "onb_free-tier": {
+    "code": 400,
+    "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
+   },
+   "onb_legacy-tier": {
+    "code": 400,
+    "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
+   },
    "gen_gemini-2.5-flash": {
     "code": 403,
-    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you are not an enterprise user and believe y"
+    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you are not an enterpris"
    },
    "gen_gemini-2.5-pro": {
     "code": 403,
-    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you are not an enterprise user and believe y"
+    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you are not an enterpris"
    }
   }
  },
