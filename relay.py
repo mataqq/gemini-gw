@@ -848,11 +848,17 @@ class Handler(BaseHTTPRequestHandler):
         url = base + path + (("?" + q) if q else "")
         n = int(self.headers.get("Content-Length", "0") or 0)
         data = self.rfile.read(n) if n else None
-        hdrs = {"Content-Type": self.headers.get("Content-Type", "application/json"),
-                "User-Agent": "gw-pass"}
-        auth = self.headers.get("Authorization")
-        if auth:
-            hdrs["Authorization"] = auth
+        hdrs = {}
+        for k, v in self.headers.items():
+            lk = k.lower()
+            if lk in ("host", "connection", "content-length", "accept-encoding", "expect", "transfer-encoding"):
+                continue
+            hdrs[k] = v
+        hdrs.setdefault("Content-Type", "application/json")
+        hdrs.setdefault("User-Agent", "antigravity/cli/1.5.3 windows/amd64")
+        hdrs.setdefault("Accept", "*/*")
+        hdrs.setdefault("Accept-Encoding", "gzip")
+        hdrs.setdefault("requestId", "req-" + __import__("uuid").uuid4().hex)
         try:
             resp = _http(url, data=data, headers=hdrs, timeout=300)
             if isinstance(resp, tuple):
@@ -872,6 +878,12 @@ class Handler(BaseHTTPRequestHandler):
             code, body = e.code, e.read()
         except Exception as e:
             code, body = 502, str(e).encode()
+        if body[:2] == bytes([0x1f, 0x8b]):
+            import gzip as _gz2
+            try:
+                body = _gz2.decompress(body)
+            except Exception:
+                pass
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
