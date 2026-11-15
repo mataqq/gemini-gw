@@ -63,14 +63,14 @@ METAS = [{'pluginType': 'GEMINI_CLI'},
          {'pluginType': 'ANTIGRAVITY'},
          {'ideType': 'ANTIGRAVITY', 'pluginType': 'IDE_UNSPECIFIED'},
          {}]
-BASE = 'https://daily-cloudcode-pa.googleapis.com'
-
-def _post(url, tok, body, tmo=40):
-    return post(url, tok, body, tmo)
+CC = 'https://cloudcode-pa.googleapis.com'      # control plane (loadCodeAssist / onboardUser)
+DAILY = 'https://daily-cloudcode-pa.googleapis.com'  # inference plane
 
 def _proj_of(j):
+    if not isinstance(j, dict):
+        return ''
     for k in ('cloudaicompanionProject', 'project', 'projectId'):
-        v = j.get(k) if isinstance(j, dict) else None
+        v = j.get(k)
         if isinstance(v, str) and v:
             return v
         if isinstance(v, dict):
@@ -80,39 +80,40 @@ def _proj_of(j):
     return ''
 
 def tier_of(tok):
-    out = {'lca': [], 'meta_used': None}
+    out = {'lca': [], 'meta_used': None, 'project': ''}
     j = None
     for i, m in enumerate(METAS):
-        r = _post(BASE + '/v1internal:loadCodeAssist', tok, {'metadata': m})
-        out['lca'].append({'v': i, 'code': r.get('_err') or 200,
-                           'b': str(r.get('_body') or '')[:120]})
+        r = post(CC + '/v1internal:loadCodeAssist', tok, {'metadata': m})
+        out['lca'].append({'v': i, 'code': r.get('_err') or 200, 'b': str(r.get('_body') or '')[:90]})
         if not r.get('_err'):
             j = r; out['meta_used'] = i
             break
-    proj = ''
     if j:
         out['currentTier'] = j.get('currentTier')
         out['paidTier'] = j.get('paidTier')
-        proj = _proj_of(j)
         out['allowedTiers'] = [t.get('id') for t in (j.get('allowedTiers') or []) if isinstance(t, dict)]
-    if not proj and j is not None:
-        tiers = [t.get('id') for t in (j.get('allowedTiers') or []) if isinstance(t, dict)] or ['free-tier']
-        for tid in tiers[:2]:
-            o = _post(BASE + '/v1internal:onboardUser', tok,
-                      {'tierId': tid, 'metadata': {'pluginType': 'GEMINI_CLI'}}, tmo=60)
-            out['onboard_' + str(tid)] = {'code': o.get('_err') or 200,
-                                          'b': str(o.get('_body') or '')[:100]}
-            proj = _proj_of(o.get('response') or o) or proj
-            if proj:
+        out['project'] = _proj_of(j)
+    if not out['project']:
+        order = [t.get('id') for t in ((j or {}).get('allowedTiers') or []) if isinstance(t, dict)]
+        order += ['free-tier', 'standard-tier', 'legacy-tier']
+        seen = []
+        for tid in order:
+            if not tid or tid in seen:
+                continue
+            seen.append(tid)
+            o = post(CC + '/v1internal:onboardUser', tok, {'tierId': tid, 'metadata': {'pluginType': 'GEMINI_CLI'}}, tmo=60)
+            out['onb_' + tid] = {'code': o.get('_err') or 200, 'b': str(o.get('_body') or '')[:90]}
+            pj = _proj_of(o.get('response') or o)
+            if pj:
+                out['project'] = pj; out['onb_via'] = tid
                 break
-    out['project'] = proj
     for mid in ('gemini-2.5-flash', 'gemini-2.5-pro'):
-        g = _post(BASE + '/v1internal:generateContent', tok,
-                  {'project': proj, 'model': mid,
-                   'request': {'contents': [{'role': 'user', 'parts': [{'text': 'say: PONG'}]}],
-                               'generationConfig': {'maxOutputTokens': 12}}}, tmo=60)
+        g = post(DAILY + '/v1internal:generateContent', tok,
+                 {'project': out['project'], 'model': mid,
+                  'request': {'contents': [{'role': 'user', 'parts': [{'text': 'say: PONG'}]}],
+                              'generationConfig': {'maxOutputTokens': 12}}}, tmo=60)
         if g.get('_err'):
-            out['gen_' + mid] = {'code': g['_err'], 'b': str(g.get('_body'))[:200]}
+            out['gen_' + mid] = {'code': g['_err'], 'b': str(g.get('_body'))[:180]}
         else:
             t2 = ''
             for c in ((g.get('response') or {}).get('candidates') or []):
