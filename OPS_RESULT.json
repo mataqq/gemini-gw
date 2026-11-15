@@ -1,66 +1,22 @@
 {
-  "lca_before": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
+  "burst_shared_aicode": {
+    "codes": {
+      "503": 8
+    },
+    "sample_err": "{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"No capacity available for model gemini-2.5-pro on the server\",\n    \"status\": \"UNAVAILABLE\",\n    \"details\": [\n      {\n        \"@type\""
   },
-  "gen_shared": {
-    "status": 200,
-    "out": "OK:OK"
+  "burst_fake_project": {
+    "codes": {
+      "429": 7,
+      "503": 1
+    },
+    "sample_err": "{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You have exhausted your capacity on this model. Your quota will reset after 4h51m22s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"det"
   },
-  "onboard": {
-    "status": 200,
-    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"gw-custom-probe-1\"\n    },\n    \"releaseChannel\": {\n      \"type\": \"EXPERIMENTAL\",\n      \"name\": \"Preview Cha"
-  },
-  "lca_after_0": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
-  },
-  "lca_after_1": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
-  },
-  "lca_after_2": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
-  },
-  "lca_after_3": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
-  },
-  "lca_after_4": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
-  },
-  "lca_after_5": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
-  },
-  "gen_custom": {
-    "status": 200,
-    "out": "OK:OK"
-  },
-  "gen_custom_retry": {
-    "status": 200,
-    "out": "OK:OK"
-  },
-  "lca_final": {
-    "status": 200,
-    "currentTier": "free-tier",
-    "project": "aicode-consumers",
-    "gcpManaged": false
+  "burst_fake_project2": {
+    "codes": {
+      "429": 5,
+      "503": 3
+    },
+    "sample_err": "{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You have exhausted your capacity on this model. Your quota will reset after 4h51m12s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"det"
   }
 }
