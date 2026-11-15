@@ -57,9 +57,16 @@ def post(url, tok, body, tmo=40, raw_key=None, extra=None):
     try:
         r = urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(body).encode(),
             headers=hh, method='POST'), timeout=tmo)
-        raw = r.read().decode('utf-8', 'replace')
+        rb = r.read()
+        if rb[:2] == bytes([0x1f, 0x8b]):
+            import gzip as _gz
+            try:
+                rb = _gz.decompress(rb)
+            except Exception:
+                pass
+        raw = rb.decode('utf-8', 'replace')
         if raw_key:
-            POST_RAW[raw_key] = raw[:2200]
+            POST_RAW[raw_key] = raw[:2400]
         return json.loads(raw)
     except urllib.error.HTTPError as e:
         return {'_err': e.code, '_body': e.read().decode('utf-8', 'replace')[:400]}
