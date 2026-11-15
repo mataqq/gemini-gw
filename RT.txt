@@ -17,36 +17,48 @@
    "lca": [
     {
      "v": 0,
+     "meta": "{'ideType': 'ANTIGRAVITY'}",
+     "code": 200,
+     "b": ""
+    },
+    {
+     "v": 1,
+     "meta": "OMIT_KEY",
+     "code": 200,
+     "b": ""
+    },
+    {
+     "v": 2,
      "meta": "{'pluginType': 'GEMINI_CLI'}",
      "code": 400,
      "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
-     "v": 1,
+     "v": 3,
      "meta": "{'pluginType': 'GEMINI_CLI', 'ideType': ",
      "code": 400,
      "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
-     "v": 2,
+     "v": 4,
      "meta": "{'pluginType': 'ANTIGRAVITY'}",
      "code": 400,
      "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
-     "v": 3,
+     "v": 5,
      "meta": "{'ideType': 'ANTIGRAVITY', 'pluginType':",
      "code": 400,
      "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
     },
     {
-     "v": 4,
+     "v": 6,
      "meta": "{}",
      "code": 200,
      "b": ""
     }
    ],
-   "meta_used": 4,
+   "meta_used": 6,
    "project": "",
    "currentTier": null,
    "paidTier": null,
