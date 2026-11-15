@@ -1,0 +1,45 @@
+{
+ "probe": {
+  "tag": "PASTED_RT",
+  "present": true,
+  "len": 103,
+  "attempts": [],
+  "client": "antigravity",
+  "email_masked": "mah***20@gmail.com",
+  "email_fp": "814f5fe1b782b2b9",
+  "match_expected": true,
+  "sub": "105916620899426014943",
+  "email_verified": true,
+  "ttl": 3599,
+  "scope_has_generative": false,
+  "verdict": "valid",
+  "probe": {
+   "loadCodeAssist": {
+    "_err": 400,
+    "_body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"ANTIGRAVITY\\\"\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n"
+   },
+   "gen_pro": {
+    "_err": 400,
+    "_body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid JSON payload received. Unknown name \\\"contents\\\": Cannot find field.\\nInvalid JSON payload received. Unknown name \\\"generationConfig\\\": Cannot find field.\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"description\""
+   }
+  }
+ },
+ "config": {
+  "tag": "GOOGLE_REFRESH_TOKEN",
+  "present": true,
+  "len": 103,
+  "attempts": [],
+  "client": "antigravity",
+  "email_masked": "mah***20@gmail.com",
+  "email_fp": "814f5fe1b782b2b9",
+  "match_expected": true,
+  "sub": "105916620899426014943",
+  "email_verified": true,
+  "ttl": 3599,
+  "scope_has_generative": false,
+  "verdict": "valid"
+ },
+ "same_account": true,
+ "matches_expected_account": true,
+ "config_matches_expected_account": true
+}
