@@ -1,89 +1,66 @@
 {
-  "lca_status": 200,
-  "lca_raw": {
-    "currentTier": {
-      "id": "free-tier",
-      "name": "Antigravity",
-      "description": "Gemini-powered code suggestions and chat in multiple IDEs",
-      "privacyNotice": {
-        "showNotice": true,
-        "noticeText": "This notice and our Privacy Policy - https://policies.google.com/privacy - describe how Gemini Code Assist for individuals handles your data. Please read them carefully.\n\nWhen you use Gemini Code Assist for individuals, Google collects your prompts, related code, generated output, code edits, related feature usage information, and your feedback to provide, improve, and develop Google products and services and machine learning technologies.\n\nTo help with quality and improve our products (such as generative machine-learning models), human reviewers may read, annotate, and process the data collected above. We take steps to protect your privacy as part of this process. This includes disconnecting the data from your Google Account before reviewers see or annotate it, and storing those disconnected copies for up to 18 months. Please don't submit confidential information or any data you wouldn't want a reviewer to see or Google to use to improve our products, services, and machine-learning technologies.\n\nIf you don't want this data used to improve Google's machine learning models, you can opt out below."
-      },
-      "upgradeSubscriptionUri": "https://accounts.google.com/AccountChooser?Email=mahabubbashah820%40gmail.com&continue=https%3A%2F%2Fone.google.com%2Fai",
-      "upgradeSubscriptionText": "Upgrade to get 1,500 model requests per day with Gemini CLI and Gemini Code Assist's agent mode with Google AI Pro.",
-      "upgradeSubscriptionType": "GOOGLE_ONE"
-    },
-    "allowedTiers": [
-      {
-        "id": "free-tier",
-        "name": "Antigravity",
-        "description": "Gemini-powered code suggestions and chat in multiple IDEs",
-        "privacyNotice": {
-          "showNotice": true,
-          "noticeText": "This notice and our Privacy Policy - https://policies.google.com/privacy - describe how Gemini Code Assist for individuals handles your data. Please read them carefully.\n\nWhen you use Gemini Code Assist for individuals, Google collects your prompts, related code, generated output, code edits, related feature usage information, and your feedback to provide, improve, and develop Google products and services and machine learning technologies.\n\nTo help with quality and improve our products (such as generative machine-learning models), human reviewers may read, annotate, and process the data collected above. We take steps to protect your privacy as part of this process. This includes disconnecting the data from your Google Account before reviewers see or annotate it, and storing those disconnected copies for up to 18 months. Please don't submit confidential information or any data you wouldn't want a reviewer to see or Google to use to improve our products, services, and machine-learning technologies.\n\nIf you don't want this data used to improve Google's machine learning models, you can opt out below."
-        },
-        "isDefault": true
-      },
-      {
-        "id": "standard-tier",
-        "name": "Antigravity",
-        "description": "Unlimited coding assistant with the most powerful Gemini models",
-        "userDefinedCloudaicompanionProject": true,
-        "privacyNotice": {},
-        "usesGcpTos": true
-      }
-    ],
-    "cloudaicompanionProject": "aicode-consumers",
-    "gcpManaged": false,
-    "upgradeSubscriptionUri": "https://codeassist.google.com/upgrade",
-    "paidTier": {
-      "id": "g1-pro-tier",
-      "name": "Google AI Pro",
-      "description": "Google AI Pro",
-      "upgradeSubscriptionUri": "https://antigravity.google/g1-upgrade",
-      "upgradeSubscriptionText": "You can upgrade to a Google AI Ultra plan to receive higher rate limits.",
-      "availableCredits": [
-        {
-          "creditType": "GOOGLE_ONE_AI",
-          "minimumCreditAmountForUsage": "50"
-        }
-      ]
-    }
-  },
-  "onb_std_proj_nometa": {
+  "lca_before": {
     "status": 200,
-    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"gw-nonexistent-000001\"\n    },\n    \"releaseChannel\": {\n      \"type\": \"EXPERIMENTAL\",\n      \"name\": \"Preview Channel\"\n    }\n  }\n}\n"
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
   },
-  "onb_std_proj_nometa_project": {
-    "id": "gw-nonexistent-000001"
-  },
-  "onb_std_proj_nometa_tier": "none",
-  "onb_std_proj_metaempty": {
+  "gen_shared": {
     "status": 200,
-    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"gw-nonexistent-000001\"\n    },\n    \"releaseChannel\": {\n      \"type\": \"EXPERIMENTAL\",\n      \"name\": \"Preview Channel\"\n    }\n  }\n}\n"
+    "out": "OK:OK"
   },
-  "onb_std_proj_metaempty_project": {
-    "id": "gw-nonexistent-000001"
-  },
-  "onb_std_proj_metaempty_tier": "none",
-  "onb_std_noproj": {
+  "onboard": {
     "status": 200,
-    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"aicode-consumers\"\n    }\n  }\n}\n"
+    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"gw-custom-probe-1\"\n    },\n    \"releaseChannel\": {\n      \"type\": \"EXPERIMENTAL\",\n      \"name\": \"Preview Cha"
   },
-  "onb_std_noproj_project": {
-    "id": "aicode-consumers"
-  },
-  "onb_std_noproj_tier": "none",
-  "try_gw-ops-test": {
+  "lca_after_0": {
     "status": 200,
-    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"gw-ops-test\"\n    },\n    \"releaseChannel\": {\n      \"type\": \"EXPERIMENTAL\",\n      \"name\": \"Preview Channel\"\n    }\n  }\n}\n"
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
   },
-  "try_gemini-gw-1": {
+  "lca_after_1": {
     "status": 200,
-    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"gemini-gw-1\"\n    },\n    \"releaseChannel\": {\n      \"type\": \"EXPERIMENTAL\",\n      \"name\": \"Preview Channel\"\n    }\n  }\n}\n"
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
   },
-  "try_project-gw1": {
+  "lca_after_2": {
     "status": 200,
-    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"project-gw1\"\n    },\n    \"releaseChannel\": {\n      \"type\": \"EXPERIMENTAL\",\n      \"name\": \"Preview Channel\"\n    }\n  }\n}\n"
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
+  },
+  "lca_after_3": {
+    "status": 200,
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
+  },
+  "lca_after_4": {
+    "status": 200,
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
+  },
+  "lca_after_5": {
+    "status": 200,
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
+  },
+  "gen_custom": {
+    "status": 200,
+    "out": "OK:OK"
+  },
+  "gen_custom_retry": {
+    "status": 200,
+    "out": "OK:OK"
+  },
+  "lca_final": {
+    "status": 200,
+    "currentTier": "free-tier",
+    "project": "aicode-consumers",
+    "gcpManaged": false
   }
 }
