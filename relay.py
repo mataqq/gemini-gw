@@ -533,6 +533,7 @@ def unwrap(obj):
 
 
 _ERRS = []
+_LAST = []
 
 
 def _note_err(where):
@@ -692,6 +693,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, out)
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
+        if p == "/__err":
+            return self._send(200, {"errs": _ERRS, "last": _LAST})
+        if p == "/__e502":
+            return self._send(502, {"error": {"message": "synthetic-edge-test",
+                                              "type": "upstream_error"}})
         if p == "/__tb":
             try:
                 tok = resolve_client()
@@ -760,9 +766,15 @@ class Handler(BaseHTTPRequestHandler):
                                           "Authorization": "Bearer " + token}, timeout=180)
                 except urllib.error.HTTPError as e:
                     last = (e.code, e.read().decode("utf-8", "replace"))
+                    _LAST.append({"m": m, "code": e.code, "b": last[1][:180]})
+                    del _LAST[:-12]
                     if e.code in SOFT:
                         continue
                     break
+                except Exception as e:
+                    _LAST.append({"m": m, "code": -1, "b": type(e).__name__ + ": " + str(e)[:160]})
+                    del _LAST[:-12]
+                    raise
                 j = unwrap(_json_or_text(resp))
                 text = pick_text(j)
                 tcs = pick_toolcalls(j)
@@ -808,6 +820,8 @@ class Handler(BaseHTTPRequestHandler):
                 break
             except urllib.error.HTTPError as e:
                 last = (e.code, e.read().decode("utf-8", "replace"))
+                _LAST.append({"m": m, "code": e.code, "b": last[1][:180], "stream": True})
+                del _LAST[:-12]
                 if e.code in SOFT:
                     continue
                 break
