@@ -35,6 +35,64 @@ FALLBACK = ["gemini-2.5-flash", "gemini-3-flash", "gemini-2.5-flash-thinking",
             "gemini-3.5-flash-lite"]
 SOFT = (400, 404, 429, 503)   # retry the next model instead of failing the client
 
+# The free tier has per-minute RPM quotas shared by every model in the same
+# project, so a burst of client retries exhausts it for the whole fallback chain.
+# Throttle globally and retry 429 in place before burning the next model.
+Q_MAX = int(os.environ.get("QMAX") or 2)      # concurrent upstream calls
+Q_GAP = float(os.environ.get("QGAP") or 0.35)  # min spacing between them
+RETRY_SLEEP = (1.0, 2.2, 4.0)                   # 429 backoff per model
+RETRY_BUDGET = float(os.environ.get("QRETRY") or 9.0)  # max seconds spent retrying one model
+_q_sem = threading.Semaphore(max(1, Q_MAX))
+_q_lock = threading.Lock()
+_q_last = [0.0]
+
+
+def _gate():
+    _q_sem.acquire()
+    with _q_lock:
+        dt = _q_last[0] + Q_GAP - time.time()
+        if dt > 0:
+            time.sleep(dt)
+        _q_last[0] = time.time()
+
+
+def _ungate():
+    try:
+        _q_sem.release()
+    except Exception:
+        pass
+
+
+def upstream_call(path, payload, token, accept=None, timeout=180):
+    """POST to upstream with quota throttling + 429 retry. Returns (resp, (code, body))."""
+    hd = {"Content-Type": "application/json", "Authorization": "Bearer " + token}
+    if accept:
+        hd["Accept"] = accept
+    body = json.dumps(payload).encode()
+    last = (0, "")
+    t_start = time.time()
+    for attempt in range(len(RETRY_SLEEP) + 1):
+        _gate()
+        try:
+            return _http(CFG["upstream"] + path, data=body, headers=hd, timeout=timeout), (0, "")
+        except urllib.error.HTTPError as e:
+            last = (e.code, e.read().decode("utf-8", "replace"))
+            if e.code == 429 and attempt < len(RETRY_SLEEP):
+                pass
+            else:
+                return None, last
+        except Exception as e:
+            last = (0, type(e).__name__ + ": " + str(e)[:120])
+            if attempt >= len(RETRY_SLEEP):
+                return None, last
+        finally:
+            _ungate()
+        wait = RETRY_SLEEP[attempt]
+        if time.time() - t_start + wait > RETRY_BUDGET:
+            return None, last          # stop burning the client's patience
+        time.sleep(wait)
+    return None, last
+
 CANDIDATES = [
     {"name": "antigravity",
      "client_id": "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
@@ -605,14 +663,9 @@ class Handler(BaseHTTPRequestHandler):
             chain = [model] + [m for m in FALLBACK if m != model]
             last = (0, "")
             for m in chain:
-                payload = build_payload(m, proj, body)
-                try:
-                    resp = _http(CFG["upstream"] + GEN_PATH, data=json.dumps(payload).encode(),
-                                 headers={"Content-Type": "application/json",
-                                          "Authorization": "Bearer " + token}, timeout=180)
-                except urllib.error.HTTPError as e:
-                    last = (e.code, e.read().decode("utf-8", "replace"))
-                    if e.code in SOFT:
+                resp, last = upstream_call(GEN_PATH, build_payload(m, proj, body), token)
+                if resp is None:
+                    if last[0] in SOFT:
                         continue
                     break
                 j = unwrap(_json_or_text(resp))
@@ -628,9 +681,14 @@ class Handler(BaseHTTPRequestHandler):
                               "completion_tokens": um.get("candidatesTokenCount", 0),
                               "total_tokens": um.get("totalTokenCount", 0)},
                 })
-            return self._send(502, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:400]),
-                                              "type": "upstream_error"},
-                                    "tried": chain})
+            # Quota exhaustion is retryable, not a broken gateway: surface 429 so
+            # the client waits instead of treating the endpoint as dead.
+            code = last[0] if last[0] in (401, 403, 429, 503) else 502
+            return self._send(code, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:400]),
+                                              "type": "rate_limited" if code == 429 else "upstream_error",
+                                              "code": code},
+                                    "tried": chain},
+                              extra={"Retry-After": "5"} if code == 429 else None)
         except urllib.error.HTTPError as e:
             d = e.read().decode("utf-8", "replace")
             return self._send(502, {"error": {"message": "upstream %s: %s" % (e.code, d[:400]),
@@ -691,27 +749,21 @@ class Handler(BaseHTTPRequestHandler):
 
         resp, last = None, (0, "")
         for m in chain:
-            payload = build_payload(m, proj, body)
-            try:
-                resp = _http(CFG["upstream"] + STREAM_PATH, data=json.dumps(payload).encode(),
-                             headers={"Content-Type": "application/json",
-                                      "Accept": "text/event-stream",
-                                      "Authorization": "Bearer " + token}, timeout=180)
-                used = m
-                break
-            except urllib.error.HTTPError as e:
-                last = (e.code, e.read().decode("utf-8", "replace"))
-                if e.code in SOFT:
+            resp, last = upstream_call(STREAM_PATH, build_payload(m, proj, body), token,
+                                       accept="text/event-stream")
+            if resp is None:
+                if last[0] in SOFT:
                     continue
                 break
-            except Exception as e:
-                last = (0, type(e).__name__ + ": " + str(e)[:120])
-                continue
+            used = m
+            break
 
         if resp is None:
             # headers already sent -> report the failure in-band instead of a 502
+            hint = ("[relay-retry] 上游配额用尽（429），等几秒再发一次即可" if last[0] == 429
+                    else "[relay-error] upstream %s %s" % (last[0], last[1][:160]))
             try:
-                emit(chunk({"content": "[relay-error] upstream %s %s" % (last[0], last[1][:160])}))
+                emit(chunk({"content": hint}))
                 emit(chunk({}, "stop"))
                 self.wfile.write(b"data: [DONE]\n\n")
                 self.wfile.flush()
