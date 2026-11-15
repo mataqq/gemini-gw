@@ -859,6 +859,12 @@ class Handler(BaseHTTPRequestHandler):
                 code, body = resp[0], resp[1]
             elif isinstance(resp, (bytes, bytearray)):
                 code, body = 200, bytes(resp)
+            elif hasattr(resp, "read"):
+                try:
+                    code = resp.getcode() or 200
+                except Exception:
+                    code = 200
+                body = resp.read()
             else:
                 code, body = 200, str(resp).encode()
             body = bytes(body)
