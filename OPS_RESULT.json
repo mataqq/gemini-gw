@@ -1,22 +1,45 @@
 {
-  "rt_present": true,
-  "rt_len": 103,
-  "refresh_antigravity": {
+  "projlist[None]": {
+    "status": 403,
+    "count": 0,
+    "ids": [],
+    "err": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Cloud Resource Manager API has not been used in project 1071006060591 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudre"
+  },
+  "projlist[aicode-consumers]": {
+    "status": 403,
+    "count": 0,
+    "ids": [],
+    "err": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Caller does not have required permission to use project aicode-consumers. Grant the caller the roles/serviceusage.serviceUsageConsumer role, or a custom role with the servi"
+  },
+  "projlist[1071006060591]": {
+    "status": 403,
+    "count": 0,
+    "ids": [],
+    "err": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Cloud Resource Manager API has not been used in project 1071006060591 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudre"
+  },
+  "onboard_std_plain": {
+    "status": 400,
+    "body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n            \"description\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+  },
+  "onboard_std_no_meta": {
     "status": 200,
-    "body": "ok"
+    "body": "{\n  \"done\": true,\n  \"response\": {\n    \"@type\": \"type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse\",\n    \"cloudaicompanionProject\": {\n      \"id\": \"aicode-consumers\"\n    }\n  }\n}\n"
   },
-  "client_used": "antigravity",
-  "scope": "email profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/experimentsandconfigs https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid",
-  "aud": "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
-  "has_cloud_platform": true,
-  "has_cloudplatformprojects": false,
-  "projects_list": {
-    "status": 403,
-    "body": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Cloud Resource Manager API has not been used in project 1071006060591 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com/overview?project=1071006060591 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\","
+  "onboard_std_no_meta_project": {
+    "id": "aicode-consumers"
   },
-  "project_create": {
-    "status": 403,
-    "projectId": "gw-7iun71ynm",
-    "body": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Cloud Resource Manager API has not been used in project 1071006060591 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com/overview?project=1071006060591 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\",\n    \"status\": \"PERMISSION_DENIED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"SERVICE_DISABLED\",\n        \"domain\": \"googleapis.com\",\n    "
-  }
+  "onboard_std_str_proj": {
+    "status": 400,
+    "body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n            \"description\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+  },
+  "onboard_std_dict_proj": {
+    "status": 400,
+    "body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\\nInvalid value (cloudaicompanion_project), Starting an object on a scalar field\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n            \"description\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\"\n"
+  },
+  "onboard_free_plain": {
+    "status": 400,
+    "body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n            \"description\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+  },
+  "lca_status": 400,
+  "lca_body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.PluginType), \\\"GEMINI_CLI\\\"\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"metadata.plugin_type\",\n            \"description\": \"Invalid value at 'metadata.plugin_type' (type.googleapis.com/google.inter"
 }
