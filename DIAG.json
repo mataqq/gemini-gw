@@ -1,1 +1,1 @@
-{"ok": true, "steps": {"oauth": "OK ttl=3599s", "userinfo": "OK", "project": "OK aicode-consumers", "generate": "OK 'PONG'"}, "client": "antigravity", "project": "aicode-consumers"}
+{"ok": true, "steps": {"oauth": "OK ttl=3598s", "userinfo": "OK", "project": "OK aicode-consumers", "generate": "OK 'PONG'"}, "client": "antigravity", "project": "aicode-consumers"}
