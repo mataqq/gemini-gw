@@ -8,7 +8,7 @@ B = ['GOCSPX-', 'K58FWR486LdLJ1mLB8sXC4', 'z6qDAf']
 C = ['681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib13', '5j.apps.googleusercontent.com']
 D = ['GOCSPX-', '4uHgMPm-1o7Sk-geV6Cu5cl', 'XFsxl']
 CIDS = [('antigravity', ''.join(A), ''.join(B)), ('gemini-cli', ''.join(C), ''.join(D))]
-UA = 'rt-ident/2'
+UA = 'antigravity/cli/1.5.3 windows/amd64'
 
 def mask(e):
     if not e or '@' not in e:
@@ -47,16 +47,26 @@ def get(url, tok):
     except Exception as e:
         return {'_err': 0, '_body': type(e).__name__}
 
-def post(url, tok, body, tmo=40):
+import uuid
+def post(url, tok, body, tmo=40, raw_key=None, extra=None):
+    hh = {'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json',
+          'Accept': '*/*', 'Accept-Encoding': 'gzip', 'Connection': 'close',
+          'requestId': 'req-' + str(uuid.uuid4()), 'User-Agent': UA}
+    if extra:
+        hh.update(extra)
     try:
         r = urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(body).encode(),
-            headers={'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json',
-                     'User-Agent': UA}, method='POST'), timeout=tmo)
-        return json.loads(r.read().decode())
+            headers=hh, method='POST'), timeout=tmo)
+        raw = r.read().decode('utf-8', 'replace')
+        if raw_key:
+            POST_RAW[raw_key] = raw[:2200]
+        return json.loads(raw)
     except urllib.error.HTTPError as e:
         return {'_err': e.code, '_body': e.read().decode('utf-8', 'replace')[:400]}
     except Exception as e:
         return {'_err': 0, '_body': type(e).__name__ + ': ' + str(e)[:120]}
+
+POST_RAW = {}
 
 METAS = [{'ideType': 'ANTIGRAVITY'}, None, {'pluginType': 'GEMINI_CLI'},
          {'pluginType': 'GEMINI_CLI', 'ideType': 'ANTIGRAVITY', 'platform': 'PLATFORM_UNSPECIFIED'},
@@ -106,12 +116,25 @@ def tier_of(tok):
             if not tid or tid in seen:
                 continue
             seen.append(tid)
-            o = post(CC + '/v1internal:onboardUser', tok, {'tierId': tid}, tmo=60)
+            o = post(CC + '/v1internal:onboardUser', tok, {'tierId': tid}, tmo=60,
+                     raw_key='onb_' + tid,
+                     extra={'requestType': 'agent'} if tid == 'standard-tier' else None)
             out['onb_' + tid] = {'code': o.get('_err') or 200, 'b': str(o.get('_body') or '')[:90]}
             pj = _proj_of(o.get('response') or o)
             if pj:
                 out['project'] = pj; out['onb_via'] = tid
                 break
+        # re-check LCA after onboarding (IDE does this implicitly)
+        if not out['project']:
+            j2 = post(CC + '/v1internal:loadCodeAssist', tok, {'metadata': {'ideType': 'ANTIGRAVITY'}}, raw_key='lca_after_onb')
+            out['lca_after_onb_code'] = j2.get('_err') or 200
+            jr = j2.get('response') or j2
+            out['after_onb'] = {'currentTier': jr.get('currentTier'), 'paidTier': jr.get('paidTier'),
+                                'project': _proj_of(jr),
+                                'allowedTiers': [t.get('id') for t in (jr.get('allowedTiers') or []) if isinstance(t, dict)]}
+            if out['after_onb']['project']:
+                out['project'] = out['after_onb']['project']
+                out['onb_via'] = 'lca-recheck'
     if out['project']:
         f = post(DAILY + '/v1internal:fetchAvailableModels', tok, {'project': out['project']}, tmo=60)
         if f.get('_err'):
@@ -127,7 +150,7 @@ def tier_of(tok):
         body = dict(GENBASE); body['model'] = mid
         if out['project']:
             body = {'project': out['project'], **body}
-        g = post(DAILY + '/v1internal:generateContent', tok, body, tmo=60)
+        g = post(DAILY + '/v1internal:generateContent', tok, body, tmo=60, extra={'requestType': 'agent'})
         if g.get('_err'):
             out['gen_' + mid] = {'code': g['_err'], 'b': str(g.get('_body'))[:180]}
         else:
@@ -201,4 +224,5 @@ def upload(text):
     except Exception as e:
         print('upload failed', type(e).__name__)
 
+res['raw'] = POST_RAW
 upload(json.dumps(res, ensure_ascii=False, indent=1))
