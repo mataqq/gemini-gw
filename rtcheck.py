@@ -59,26 +59,36 @@ def post(url, tok, body, tmo=40):
         return {'_err': 0, '_body': type(e).__name__ + ': ' + str(e)[:120]}
 
 def tier_of(tok):
-    meta = {'pluginType': 'ANTIGRAVITY', 'ideType': 'ANTIGRAVITY'}
     out = {}
+    meta = {'pluginType': 'GEMINI_CLI', 'ideType': 'ANTIGRAVITY'}
     j = post('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', tok,
              {'metadata': meta})
+    proj = None
     if j.get('_err'):
         out['loadCodeAssist'] = j
     else:
-        ct = j.get('currentTier') or {}
-        pt = j.get('paidTier') or {}
-        out['currentTier'] = ct
-        out['paidTier'] = pt
-        out['project'] = j.get('cloudaicompanionProject')
+        out['currentTier'] = j.get('currentTier')
+        out['paidTier'] = j.get('paidTier')
+        proj = j.get('cloudaicompanionProject')
+        out['project'] = proj
         out['allowedTiers'] = [t.get('id') for t in (j.get('allowedTiers') or []) if isinstance(t, dict)]
-    g = post('https://daily-cloudcode-pa.googleapis.com/v1internal:generateContent', tok,
-             {'model': 'gemini-2.5-pro', 'contents': [{'role': 'user', 'parts': [{'text': 'PONG'}]}],
-              'generationConfig': {'maxOutputTokens': 8}} , tmo=60)
-    if g.get('_err'):
-        out['gen_pro'] = g
-    else:
-        out['gen_pro'] = '200 OK'
+    proj = proj or 'aicode-consumers'
+    for mid in ('gemini-2.5-pro', 'gemini-2.5-flash'):
+        g = post('https://daily-cloudcode-pa.googleapis.com/v1internal:generateContent', tok,
+                 {'project': proj, 'model': mid,
+                  'request': {'contents': [{'role': 'user', 'parts': [{'text': 'say: PONG'}]}],
+                              'generationConfig': {'maxOutputTokens': 12}}}, tmo=60)
+        if g.get('_err'):
+            out['gen_' + mid] = {'code': g['_err'], 'b': str(g.get('_body'))[:160]}
+        else:
+            txt2 = ''
+            try:
+                for c in (g.get('response', {}).get('candidates') or []):
+                    for pp in (c.get('content', {}).get('parts') or []):
+                        txt2 += pp.get('text') or ''
+            except Exception:
+                pass
+            out['gen_' + mid] = {'code': 200, 'text': txt2[:60]}
     return out
 
 def identify(tag, rt, deep=False):
