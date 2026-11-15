@@ -84,6 +84,32 @@ https://yyyy-yyyy.lhr.life
 
 **第一行是主入口，后面的是备用入口**（走的是不同域名，某一条被运营商卡住时换另一条）。挑第一个能打开的用就行。
 
+## 1.5 本机固定地址（Cline / Antigravity IDE 专用）
+
+手机端只能读 LIVE_URL.txt 拿「当前」地址；本机上更省事的做法是用固定地址，永不变：
+
+| 项目 | 值 |
+|---|---|
+| API Base / Base URL | **http://127.0.0.1:8787/v1** |
+| API Key | `sk-gw-dev-9527` |
+| Model | `gemini-2.5-flash` |
+
+这是本机 shim（`gemini-gw\local_shim.py`）常驻在 127.0.0.1:8787 的入口：
+
+- 每次请求前按 LIVE_URL.txt（gh-proxy + jsDelivr 双镜像，带时间戳穿透 CDN 缓存）拉最新隧道
+- 对所有候选地址做 `/healthz` 探活，只挑真的活着的那条；缓存 45 秒
+- 撞到 `502/503/504/520-530` 或连接异常 → 立刻重新探活换隧道并重放一次（实测自愈 3.85 秒）
+- 计划任务 `RelayShimWatch`（开机 / 登录 / 每 3 分钟）发现 8787 不健康就自动重启
+
+所以 Cline 里那条 `http://127.0.0.1:8787/v1` 可以永久不换，Actions 换隧道也不用改配置。
+
+实测（2026-11-15，经 8787）：
+
+```
+sequential    20/20 ok  codes={'200': 20}  p50=1.83s max=7.15s
+6-concurrent   6/6  ok  codes={'200': 6}   p50=1.71s max=3.29s
+stream         4/4  ok  codes={'200': 4}   p50=1.79s max=1.89s
+```
 ## 2. 填进客户端
 
 任意支持 OpenAI 兼容接口的手机 App（ChatBox / NextChat / OpenCat / LobeChat 等）：
