@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-# Identify which Google account a refresh token belongs to, without printing it.
-import hashlib, json, os, sys, urllib.parse, urllib.request, urllib.error
+# Identify the Google account behind a refresh token + prove tier, without leaking the token.
+import base64, hashlib, json, os, sys, urllib.parse, urllib.request, urllib.error
 
+EXPECT = '814f5fe1b782b2b9'   # sha256(mahabubbashah820@gmail.com)[:16]
 A = ['1071006060591-tmhssin2h21lcre', '235vtolojh4g403ep.apps.googleusercontent.com']
 B = ['GOCSPX-', 'K58FWR486LdLJ1mLB8sXC4', 'z6qDAf']
 C = ['681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib13', '5j.apps.googleusercontent.com']
 D = ['GOCSPX-', '4uHgMPm-1o7Sk-geV6Cu5cl', 'XFsxl']
-
-CIDS = [('antigravity', ''.join(A), ''.join(B)),
-        ('gemini-cli', ''.join(C), ''.join(D))]
+CIDS = [('antigravity', ''.join(A), ''.join(B)), ('gemini-cli', ''.join(C), ''.join(D))]
+UA = 'rt-ident/2'
 
 def mask(e):
     if not e or '@' not in e:
         return '-'
     u, d = e.split('@', 1)
-    return u[:4] + '*' * max(0, min(6, len(u) - 4)) + '@' + d
+    return u[:3] + '***' + u[-2:] + '@' + d if len(u) > 5 else u[:1] + '***@' + d
 
 def fp(e):
     return hashlib.sha256(e.strip().lower().encode()).hexdigest()[:16]
@@ -23,33 +23,65 @@ def refresh(rt, cid, sec):
     data = urllib.parse.urlencode({'client_id': cid, 'client_secret': sec,
                                    'refresh_token': rt, 'grant_type': 'refresh_token'}).encode()
     try:
-        r = urllib.request.urlopen(urllib.request.Request(
-            'https://oauth2.googleapis.com/token', data=data,
-            headers={'Content-Type': 'application/x-www-form-urlencoded',
-                     'User-Agent': 'rt-ident/1'}), timeout=30)
+        r = urllib.request.urlopen(urllib.request.Request('https://oauth2.googleapis.com/token',
+            data=data, headers={'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA}),
+            timeout=30)
         return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
         b = e.read().decode('utf-8', 'replace')
         try:
             j = json.loads(b)
-            return {'_err': e.code, '_body': j.get('error'), '_desc': str(j.get('error_description'))[:120]}
+            return {'_err': e.code, '_body': j.get('error'), '_desc': str(j.get('error_description'))[:140]}
         except Exception:
-            return {'_err': e.code, '_body': b[:120]}
+            return {'_err': e.code, '_body': b[:140]}
     except Exception as e:
-        return {'_err': 0, '_body': type(e).__name__ + ': ' + str(e)[:90]}
+        return {'_err': 0, '_body': type(e).__name__ + ': ' + str(e)[:100]}
 
-def userinfo(tok):
+def get(url, tok):
     try:
-        r = urllib.request.urlopen(urllib.request.Request(
-            'https://www.googleapis.com/oauth2/v3/userinfo',
-            headers={'Authorization': 'Bearer ' + tok, 'User-Agent': 'rt-ident/1'}), timeout=30)
+        r = urllib.request.urlopen(urllib.request.Request(url,
+            headers={'Authorization': 'Bearer ' + tok, 'User-Agent': UA}), timeout=30)
         return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
-        return {'_err': e.code, '_body': e.read().decode('utf-8', 'replace')[:120]}
+        return {'_err': e.code, '_body': e.read().decode('utf-8', 'replace')[:200]}
     except Exception as e:
         return {'_err': 0, '_body': type(e).__name__}
 
-def identify(tag, rt):
+def post(url, tok, body, tmo=40):
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(body).encode(),
+            headers={'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json',
+                     'User-Agent': UA}, method='POST'), timeout=tmo)
+        return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return {'_err': e.code, '_body': e.read().decode('utf-8', 'replace')[:400]}
+    except Exception as e:
+        return {'_err': 0, '_body': type(e).__name__ + ': ' + str(e)[:120]}
+
+def tier_of(tok):
+    meta = {'pluginType': 'ANTIGRAVITY', 'ideType': 'ANTIGRAVITY'}
+    out = {}
+    j = post('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', tok,
+             {'metadata': meta})
+    if j.get('_err'):
+        out['loadCodeAssist'] = j
+    else:
+        ct = j.get('currentTier') or {}
+        pt = j.get('paidTier') or {}
+        out['currentTier'] = ct
+        out['paidTier'] = pt
+        out['project'] = j.get('cloudaicompanionProject')
+        out['allowedTiers'] = [t.get('id') for t in (j.get('allowedTiers') or []) if isinstance(t, dict)]
+    g = post('https://daily-cloudcode-pa.googleapis.com/v1internal:generateContent', tok,
+             {'model': 'gemini-2.5-pro', 'contents': [{'role': 'user', 'parts': [{'text': 'PONG'}]}],
+              'generationConfig': {'maxOutputTokens': 8}} , tmo=60)
+    if g.get('_err'):
+        out['gen_pro'] = g
+    else:
+        out['gen_pro'] = '200 OK'
+    return out
+
+def identify(tag, rt, deep=False):
     out = {'tag': tag, 'present': bool(rt), 'len': len(rt or ''), 'attempts': []}
     if not rt:
         out['verdict'] = 'empty'
@@ -57,31 +89,59 @@ def identify(tag, rt):
     for name, cid, sec in CIDS:
         j = refresh(rt, cid, sec)
         if j.get('access_token'):
-            ui = userinfo(j['access_token'])
+            ui = get('https://www.googleapis.com/oauth2/v3/userinfo', j['access_token'])
             email = (ui.get('email') or '').strip()
             out['client'] = name
             out['email_masked'] = mask(email)
             out['email_fp'] = fp(email) if email else '-'
+            out['match_expected'] = (out['email_fp'] == EXPECT)
             out['sub'] = ui.get('sub')
             out['email_verified'] = ui.get('email_verified')
             out['ttl'] = j.get('expires_in')
-            out['scope'] = (j.get('scope') or '')[:400]
+            out['scope_has_generative'] = 'generative-language' in (j.get('scope') or '')
             out['verdict'] = 'valid'
+            if deep:
+                out['probe'] = tier_of(j['access_token'])
             return out
-        out['attempts'].append({'client': name, 'err': j.get('_err'), 'body': j.get('_body')})
+        out['attempts'].append({'client': name, 'err': j.get('_err'), 'body': j.get('_body'),
+                                'desc': j.get('_desc')})
     out['verdict'] = 'rejected by every candidate client_id'
     return out
 
-pr = identify('PROBE_RT', os.environ.get('PROBE_RT', ''))
-cf = identify('GOOGLE_REFRESH_TOKEN', os.environ.get('GOOGLE_REFRESH_TOKEN', ''))
-same = bool(pr.get('email_fp')) and pr.get('email_fp') == cf.get('email_fp')
-print(json.dumps({'probe': pr, 'config': cf, 'same_account': same}, ensure_ascii=False, indent=2))
-if pr.get('verdict') == 'valid':
-    print('VERDICT: pasted token VALID client=%s account_fp=%s ttl=%s' % (pr['client'], pr['email_fp'], pr.get('ttl')))
-else:
-    print('VERDICT: pasted token INVALID -> %s' % pr.get('verdict'))
-if cf.get('verdict') == 'valid':
-    print('VERDICT: configured upstream VALID client=%s account_fp=%s' % (cf['client'], cf['email_fp']))
-else:
-    print('VERDICT: configured upstream INVALID -> %s' % cf.get('verdict'))
-print('VERDICT: same account = %s' % same)
+res = {'probe': identify('PASTED_RT', os.environ.get('PROBE_RT', ''), deep=True),
+       'config': identify('GOOGLE_REFRESH_TOKEN', os.environ.get('GOOGLE_REFRESH_TOKEN', ''))}
+pr = res['probe']; cf = res['config']
+res['same_account'] = bool(pr.get('email_fp')) and pr.get('email_fp') == cf.get('email_fp')
+res['matches_expected_account'] = bool(pr.get('match_expected'))
+res['config_matches_expected_account'] = bool(cf.get('match_expected'))
+print(json.dumps(res, ensure_ascii=False, indent=2))
+print('VERDICT pasted  : %s | account_fp=%s | expected=%s' % (pr.get('verdict'), pr.get('email_fp'), EXPECT))
+print('VERDICT upstream: %s | account_fp=%s' % (cf.get('verdict'), cf.get('email_fp')))
+print('VERDICT same_account=%s matches_expected=%s' % (res['same_account'], res['matches_expected_account']))
+
+def upload(text):
+    tok = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+    if not tok:
+        print('no token, skip upload'); return
+    api = 'https://api.github.com/repos/mataqq/gemini-gw/contents/RT.txt'
+    hdr = {'Authorization': 'Bearer ' + tok, 'Accept': 'application/vnd.github+json',
+           'User-Agent': UA, 'Content-Type': 'application/json'}
+    sha = None
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(api, headers=hdr), timeout=30)
+        sha = json.loads(r.read().decode()).get('sha')
+    except Exception:
+        pass
+    body = {'message': 'rt identity check', 'content': base64.b64encode(text.encode()).decode()}
+    if sha:
+        body['sha'] = sha
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(api, data=json.dumps(body).encode(),
+            headers=hdr, method='PUT'), timeout=30)
+        print('RT.txt uploaded', r.getcode())
+    except urllib.error.HTTPError as e:
+        print('upload failed', e.code, e.read().decode('utf-8', 'replace')[:200])
+    except Exception as e:
+        print('upload failed', type(e).__name__)
+
+upload(json.dumps(res, ensure_ascii=False, indent=1))

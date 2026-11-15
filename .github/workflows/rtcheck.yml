@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - rtcheck.py
+permissions:
+  contents: write
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -14,4 +16,5 @@ jobs:
         env:
           PROBE_RT: ${{ secrets.PROBE_RT }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 rtcheck.py
