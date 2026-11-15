@@ -2,114 +2,105 @@
 import json, os, random, string, traceback, urllib.parse, urllib.request, urllib.error
 
 OUT = {}
-
 def flush():
     with open("OPS_RESULT.json", "w", encoding="utf-8") as f:
         json.dump(OUT, f, ensure_ascii=False, indent=2)
-
 def rec(k, v):
-    OUT[k] = v
-    flush()
-    print("OPS " + k + " = " + json.dumps(v, ensure_ascii=False)[:900], flush=True)
+    OUT[k] = v; flush()
+    print("OPS " + k + " = " + json.dumps(v, ensure_ascii=False)[:1100], flush=True)
 
-CID   = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-CSEC  = "".join(["GOCSPX-", "K58FW", "R486LdLJ1mLB8sXC4z6qDAf"])
-CID2  = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
-CSEC2 = "".join(["GOCSPX-", "4uHgMP", "m-1o7Sk-geV6Cu5", "clXFsxl"])
+CID  = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+CSEC = "".join(["GOCSPX-", "K58FW", "R486LdLJ1mLB8sXC4z6qDAf"])
 UA = "antigravity/cli/1.5.3 linux/amd64"
 
-def post(url, data, hdr=None, timeout=30, form=False):
+def post(url, data, hdr=None, timeout=45, form=False):
     if form:
-        body = urllib.parse.urlencode(data).encode()
-        ct = "application/x-www-form-urlencoded"
+        body = urllib.parse.urlencode(data).encode(); ct = "application/x-www-form-urlencoded"
     else:
-        body = json.dumps(data).encode()
-        ct = "application/json"
-    h = {"Content-Type": ct}
-    h.update(hdr or {})
+        body = json.dumps(data).encode(); ct = "application/json"
+    h = {"Content-Type": ct}; h.update(hdr or {})
     rq = urllib.request.Request(url, data=body, method="POST", headers=h)
     try:
         with urllib.request.urlopen(rq, timeout=timeout) as r:
-            return r.getcode(), r.read().decode("utf-8", "replace")
+            return r.getcode(), r.read().decode("utf-8","replace")
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")[:900]
+        return e.code, e.read().decode("utf-8","replace")[:900]
     except Exception as ex:
         return "ERR", type(ex).__name__ + " " + str(ex)[:200]
 
-def get(url, tok=None, timeout=30):
-    h = {"Accept": "application/json"}
-    if tok:
-        h["Authorization"] = "Bearer " + tok
+def get(url, tok, qp=None, timeout=40):
+    h = {"Accept": "application/json", "Authorization": "Bearer " + tok}
+    if qp: h["x-goog-user-project"] = qp
     rq = urllib.request.Request(url, headers=h)
     try:
         with urllib.request.urlopen(rq, timeout=timeout) as r:
-            return r.getcode(), r.read().decode("utf-8", "replace")
+            return r.getcode(), r.read().decode("utf-8","replace")
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")[:900]
+        return e.code, e.read().decode("utf-8","replace")[:700]
     except Exception as ex:
         return "ERR", type(ex).__name__ + " " + str(ex)[:200]
 
 def main():
     RT = (os.environ.get("RT") or "").strip()
-    rec("rt_present", bool(RT))
-    rec("rt_len", len(RT))
+    c, b = post("https://oauth2.googleapis.com/token", {"client_id": CID, "client_secret": CSEC,
+                "refresh_token": RT, "grant_type": "refresh_token"}, form=True)
+    if c != 200:
+        rec("refresh", {"status": c, "body": b[:200]}); return
+    tok = json.loads(b)["access_token"]
 
-    tok = None
-    for name, cid, cs in (("antigravity", CID, CSEC), ("gemini-cli", CID2, CSEC2)):
-        c, b = post("https://oauth2.googleapis.com/token",
-                    {"client_id": cid, "client_secret": cs,
-                     "refresh_token": RT, "grant_type": "refresh_token"}, form=True)
-        rec("refresh_" + name, {"status": c, "body": ("ok" if c == 200 else b[:200])})
+    # 1) project listing under several quota-project headers
+    for qp in (None, "aicode-consumers", "1071006060591"):
+        c, b = get("https://cloudresourcemanager.googleapis.com/v1/projects?pageSize=50", tok, qp)
+        ids = []
         if c == 200:
-            tok = json.loads(b).get("access_token")
-            rec("client_used", name)
-            break
+            ids = [p.get("projectId") for p in json.loads(b).get("projects", [])]
+        rec("projlist[" + str(qp) + "]", {"status": c, "count": len(ids), "ids": ids[:15],
+                                          "err": None if c == 200 else b[:220]})
 
-    if not tok:
-        rec("verdict", "no access token; stop")
-        return
+    # 2) does onboardUser provision a project on its own?
+    variants = [
+        ("std_plain",         {"tierId": "standard-tier", "metadata": {"pluginType": "GEMINI_CLI"}}),
+        ("std_no_meta",       {"tierId": "standard-tier"}),
+        ("std_str_proj",      {"tierId": "standard-tier", "metadata": {"pluginType": "GEMINI_CLI"},
+                               "cloudaicompanionProject": "gw-auto-1"}),
+        ("std_dict_proj",     {"tierId": "standard-tier", "metadata": {"pluginType": "GEMINI_CLI"},
+                               "cloudaicompanionProject": {"id": "gw-auto-2"}}),
+        ("free_plain",        {"tierId": "free-tier", "metadata": {"pluginType": "GEMINI_CLI"}}),
+    ]
+    for label, body in variants:
+        c, b = post("https://cloudcode-pa.googleapis.com/v1internal:onboardUser", body,
+                    {"Authorization": "Bearer " + tok, "User-Agent": UA}, timeout=60)
+        short = b[:650]
+        rec("onboard_" + label, {"status": c, "body": short})
+        if c == 200:
+            try:
+                j = json.loads(b)
+                resp = j.get("response") or {}
+                rec("onboard_" + label + "_project",
+                    resp.get("cloudaicompanionProject") or j.get("cloudaicompanionProject") or "none")
+            except Exception:
+                pass
 
-    c, b = get("https://oauth2.googleapis.com/tokeninfo?access_token=" + tok)
-    scopes = []
+    # 3) loadCodeAssist raw, to see what standard-tier demands
+    c, b = post("https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+                {"metadata": {"pluginType": "GEMINI_CLI"}},
+                {"Authorization": "Bearer " + tok, "User-Agent": UA}, timeout=45)
+    rec("lca_status", c)
     if c == 200:
-        d = json.loads(b)
-        scopes = (d.get("scope") or "").split()
-        rec("scope", d.get("scope"))
-        rec("aud", d.get("aud") or d.get("azp"))
-        rec("has_cloud_platform", any("cloud-platform" in s for s in scopes))
-        rec("has_cloudplatformprojects", any("cloudplatformprojects" in s for s in scopes))
+        try:
+            j = json.loads(b)
+            rec("lca_currentTier", j.get("currentTier"))
+            rec("lca_allowedTiers", j.get("allowedTiers"))
+            rec("lca_project", j.get("cloudaicompanionProject"))
+            rec("lca_paidTier", j.get("paidTier"))
+        except Exception:
+            rec("lca_body", b[:800])
     else:
-        rec("tokeninfo", {"status": c, "body": b[:300]})
-
-    c, b = get("https://cloudresourcemanager.googleapis.com/v1/projects?pageSize=50", tok)
-    listed = []
-    if c == 200:
-        for p in json.loads(b).get("projects", []):
-            listed.append({"projectId": p.get("projectId"), "name": p.get("name"),
-                           "lifecycleState": p.get("lifecycleState")})
-        rec("projects_list", {"status": c, "count": len(listed), "items": listed[:10]})
-    else:
-        rec("projects_list", {"status": c, "body": b[:400]})
-
-    pid = "gw-" + "".join(random.choices(string.ascii_lowercase + string.digits, k=9))
-    c2, b2 = post("https://cloudresourcemanager.googleapis.com/v1/projects",
-                  {"projectId": pid, "name": "gemini-gw"},
-                  {"Authorization": "Bearer " + tok})
-    rec("project_create", {"status": c2, "projectId": pid, "body": b2[:600]})
-
-    if c2 == 200:
-        for tier in ("standard-tier", "free-tier"):
-            c3, b3 = post("https://cloudcode-pa.googleapis.com/v1internal:onboardUser",
-                          {"tierId": tier, "metadata": {"pluginType": "GEMINI_CLI"},
-                           "cloudaicompanionProject": pid},
-                          {"Authorization": "Bearer " + tok, "User-Agent": UA}, timeout=45)
-            rec("onboard_" + tier, {"status": c3, "project": pid, "body": b3[:700]})
-            if c3 == 200:
-                break
+        rec("lca_body", b[:500])
 
 try:
     main()
 except Exception:
-    rec("traceback", traceback.format_exc()[-1500:])
+    rec("traceback", traceback.format_exc()[-1200:])
 flush()
 print("RESULT WRITTEN", flush=True)
