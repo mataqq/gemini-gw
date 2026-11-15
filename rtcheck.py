@@ -58,7 +58,7 @@ def post(url, tok, body, tmo=40):
     except Exception as e:
         return {'_err': 0, '_body': type(e).__name__ + ': ' + str(e)[:120]}
 
-METAS = [{'pluginType': 'GEMINI_CLI'},
+METAS = [{'ideType': 'ANTIGRAVITY'}, None, {'pluginType': 'GEMINI_CLI'},
          {'pluginType': 'GEMINI_CLI', 'ideType': 'ANTIGRAVITY', 'platform': 'PLATFORM_UNSPECIFIED'},
          {'pluginType': 'ANTIGRAVITY'},
          {'ideType': 'ANTIGRAVITY', 'pluginType': 'IDE_UNSPECIFIED'},
