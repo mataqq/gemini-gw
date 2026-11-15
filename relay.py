@@ -444,6 +444,27 @@ def _args(v):
     return {}
 
 
+SIG_SKIP = "skip_thought_signature_validator"
+_SIG = {}
+_SIG_ARGS = {}
+
+
+def _sig_put(cid, name, args, sig):
+    if sig:
+        _SIG[cid] = sig
+        _SIG_ARGS[(name, json.dumps(args, sort_keys=True))] = sig
+    while len(_SIG) > 600:
+        _SIG.pop(next(iter(_SIG)))
+    while len(_SIG_ARGS) > 600:
+        _SIG_ARGS.pop(next(iter(_SIG_ARGS)))
+
+
+def _sig_get(cid, name, args):
+    if cid and cid in _SIG:
+        return _SIG[cid]
+    return _SIG_ARGS.get((name, json.dumps(args, sort_keys=True))) or SIG_SKIP
+
+
 def build_payload(model, proj, body):
     msgs = body.get("messages") or []
     sys_parts, contents = [], []
@@ -472,7 +493,9 @@ def build_payload(model, proj, body):
             fn = tc.get("function") or {}
             if not fn.get("name"):
                 continue
-            txt.append({"functionCall": {"name": fn["name"], "args": _args(fn.get("arguments"))}})
+            a = _args(fn.get("arguments"))
+            txt.append({"functionCall": {"name": fn["name"], "args": a,
+                                         "thoughtSignature": _sig_get(tc.get("id"), fn["name"], a)}})
         contents.append({"role": "model" if role == "assistant" else "user", "parts": txt})
     out = {"contents": contents}
     if sys_parts:
@@ -518,10 +541,13 @@ def pick_toolcalls(payload):
         fc = p.get("functionCall")
         if not isinstance(fc, dict) or not fc.get("name"):
             continue
-        out.append({"index": i, "id": "call_%s_%d" % (int(time.time() * 1000), i),
+        cid = "call_%s_%d" % (int(time.time() * 1000), i)
+        args = fc.get("args") or {}
+        _sig_put(cid, fc["name"], args, p.get("thoughtSignature"))
+        out.append({"index": i, "id": cid,
                     "type": "function",
                     "function": {"name": fc["name"],
-                                 "arguments": json.dumps(fc.get("args") or {}, ensure_ascii=False)}})
+                                 "arguments": json.dumps(args, ensure_ascii=False)}})
         i += 1
     return out
 
@@ -587,6 +613,74 @@ def tb_probe(tok, proj):
             rec["err"] = type(e).__name__ + ": " + str(e)[:200]
         rec["ms"] = int((time.time() - t0) * 1000)
         out["cases"][name] = rec
+    return out
+
+
+
+def tb_probe2(tok, proj):
+    """Test which thought_signature strategy upstream accepts on replay."""
+    tools = [{"type": "function", "function": {
+        "name": "read_file",
+        "description": "read a file",
+        "parameters": {"type": "object",
+                       "properties": {"path": {"type": "string"}},
+                       "required": ["path"]}}}]
+    u = {"role": "user", "content": "read /etc/hostname then tell me the hostname"}
+    out = {"cases": {}}
+
+    def call(contents, model="gemini-2.5-flash"):
+        payload = {"model": model, "project": proj,
+                   "request": {"contents": contents, "tools": [{"functionDeclarations": [
+                       {"name": "read_file", "description": "read a file",
+                        "parameters": {"type": "object",
+                                       "properties": {"path": {"type": "string"}},
+                                       "required": ["path"]}}]}]}}
+        t0 = time.time()
+        try:
+            r = _http(CFG["upstream"] + GEN_PATH, data=json.dumps(payload).encode(),
+                      headers={"Content-Type": "application/json",
+                               "Authorization": "Bearer " + tok}, timeout=90)
+            body = r.read().decode("utf-8", "replace")
+            return {"code": r.getcode(), "ms": int((time.time() - t0) * 1000), "body": body}
+        except urllib.error.HTTPError as e:
+            return {"code": e.code, "ms": int((time.time() - t0) * 1000),
+                    "body": e.read().decode("utf-8", "replace")}
+        except Exception as e:
+            return {"code": -1, "err": type(e).__name__ + ": " + str(e)[:160]}
+
+    first = call([{"role": "user", "parts": [{"text": u["content"]}]}])
+    out["step1_initial"] = {"code": first.get("code"), "ms": first.get("ms"),
+                            "body": (first.get("body") or first.get("err") or "")[:400]}
+    if first.get("code") != 200:
+        return out
+    j = unwrap(json.loads(first["body"]))
+    parts = (j.get("candidates") or [{}])[0].get("content", {}).get("parts") or []
+    fc_part = next((p for p in parts if isinstance(p, dict) and p.get("functionCall")), None)
+    out["step1_has_signature"] = bool(fc_part and fc_part.get("thoughtSignature"))
+    real_sig = (fc_part or {}).get("thoughtSignature") or ""
+    real_fc = (fc_part or {}).get("functionCall") or {"name": "read_file", "args": {"path": "/etc/hostname"}}
+    model_turn = {"role": "model", "parts": [{"functionCall": {
+        "name": real_fc.get("name"), "args": real_fc.get("args") or {}},
+        "thoughtSignature": real_sig}]}
+    if not real_sig:
+        model_turn["parts"] = [{"functionCall": {"name": "read_file", "args": {"path": "/etc/hostname"}}}]
+    sentinel_turn = {"role": "model", "parts": [{"functionCall": {
+        "name": "read_file", "args": {"path": "/etc/hostname"}},
+        "thoughtSignature": SIG_SKIP}]}
+    fresp = {"role": "user", "parts": [{"functionResponse": {"name": "read_file",
+                                                             "response": {"result": "my-host-42"}}}]}
+
+    out["cases"]["replay_real_sig"] = call([{"role": "user", "parts": [{"text": u["content"]}]},
+                                            model_turn, fresp])
+    out["cases"]["replay_sentinel"] = call([{"role": "user", "parts": [{"text": u["content"]}]},
+                                            sentinel_turn, fresp])
+    out["cases"]["replay_no_sig"] = call([{"role": "user", "parts": [{"text": u["content"]}]},
+                                          {"role": "model", "parts": [{"functionCall": {
+                                              "name": "read_file", "args": {"path": "/etc/hostname"}}}]},
+                                          fresp])
+    for k, v in out["cases"].items():
+        v["body"] = (v.get("body") or v.get("err") or "")[:420]
+    out["errs"] = list(_ERRS)
     return out
 
 
@@ -698,6 +792,12 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/__e502":
             return self._send(502, {"error": {"message": "synthetic-edge-test",
                                               "type": "upstream_error"}})
+        if p == "/__tb2":
+            try:
+                tok = resolve_client()
+                return self._send(200, tb_probe2(tok, project(tok)))
+            except Exception as e:
+                return self._send(500, {"error": str(e)[:300], "errs": _ERRS})
         if p == "/__tb":
             try:
                 tok = resolve_client()
@@ -768,7 +868,7 @@ class Handler(BaseHTTPRequestHandler):
                     last = (e.code, e.read().decode("utf-8", "replace"))
                     _LAST.append({"m": m, "code": e.code, "b": last[1][:180]})
                     del _LAST[:-12]
-                    if e.code in SOFT:
+                    if e.code in SOFT and "thought_signature" not in last[1]:
                         continue
                     break
                 except Exception as e:
@@ -822,7 +922,7 @@ class Handler(BaseHTTPRequestHandler):
                 last = (e.code, e.read().decode("utf-8", "replace"))
                 _LAST.append({"m": m, "code": e.code, "b": last[1][:180], "stream": True})
                 del _LAST[:-12]
-                if e.code in SOFT:
+                if e.code in SOFT and "thought_signature" not in last[1]:
                     continue
                 break
         if resp is None:
