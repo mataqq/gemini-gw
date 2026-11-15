@@ -31,92 +31,33 @@ STREAM_PATH = "/v1internal:streamGenerateContent?alt=sse"
 UA = "antigravity/1.0.0 (relay-py)"
 
 # Requested model is always tried first; these are the capacity fallbacks.
+# catalog measured live from fetchAvailableModels on a free-tier aicode-consumers project
+MODEL_IDS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash-thinking",
+    "gemini-2.5-pro",
+    "gemini-3-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-image",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash-tiered",
+    "claude-opus-5-5-high",
+    "claude-opus-5-5-medium",
+    "claude-opus-5-5-low",
+    "claude-sonnet-5-5-high",
+    "claude-sonnet-5-5-medium",
+    "claude-sonnet-5-5-low",
+    "gpt-oss-120b-medium",
+    "chat_20706",
+    "chat_23310",
+    "tab_flash_lite_preview",
+    "tab_jump_flash_lite_preview",
+]
+
 FALLBACK = ["gemini-2.5-flash", "gemini-3-flash", "gemini-2.5-flash-thinking",
             "gemini-3.5-flash-lite"]
 SOFT = (400, 404, 429, 503)   # retry the next model instead of failing the client
-
-# The free tier has per-minute RPM quotas shared by every model in the same
-# project, so a burst of client retries exhausts it for the whole fallback chain.
-# Throttle globally and retry 429 in place before burning the next model.
-Q_MAX = int(os.environ.get("QMAX") or 2)      # concurrent upstream calls
-Q_GAP = float(os.environ.get("QGAP") or 0.35)  # min spacing between them
-RETRY_SLEEP = (1.0, 2.2, 4.0)                   # 429 backoff per model
-RETRY_BUDGET = float(os.environ.get("QRETRY") or 9.0)  # max seconds spent retrying one model
-_q_sem = threading.Semaphore(max(1, Q_MAX))
-_q_lock = threading.Lock()
-_q_last = [0.0]
-
-
-def _gate():
-    _q_sem.acquire()
-    with _q_lock:
-        dt = _q_last[0] + Q_GAP - time.time()
-        if dt > 0:
-            time.sleep(dt)
-        _q_last[0] = time.time()
-
-
-def _ungate():
-    try:
-        _q_sem.release()
-    except Exception:
-        pass
-
-
-# Per-model cool-down: a model that just returned 429 stays quarantined briefly so
-# one client retry storm cannot walk the whole fallback chain for 4x the latency.
-COOL_SEC = float(os.environ.get("QCOOL") or 45.0)
-_cool = {}
-_cool_lock = threading.Lock()
-
-
-def _cool_down(m):
-    with _cool_lock:
-        _cool[m] = time.time() + COOL_SEC
-
-
-def _quarantined(m):
-    with _cool_lock:
-        return _cool.get(m, 0.0) > time.time()
-
-
-def model_chain(model):
-    """Requested model first, then fallbacks, skipping quarantined ones."""
-    rest = [m for m in FALLBACK if m != model]
-    live = [m for m in rest if not _quarantined(m)]
-    cold = [m for m in rest if _quarantined(m)]
-    return [model] + live + cold
-
-
-def upstream_call(path, payload, token, accept=None, timeout=180):
-    """POST to upstream with quota throttling + 429 retry. Returns (resp, (code, body))."""
-    hd = {"Content-Type": "application/json", "Authorization": "Bearer " + token}
-    if accept:
-        hd["Accept"] = accept
-    body = json.dumps(payload).encode()
-    last = (0, "")
-    t_start = time.time()
-    for attempt in range(len(RETRY_SLEEP) + 1):
-        _gate()
-        try:
-            return _http(CFG["upstream"] + path, data=body, headers=hd, timeout=timeout), (0, "")
-        except urllib.error.HTTPError as e:
-            last = (e.code, e.read().decode("utf-8", "replace"))
-            if e.code == 429 and attempt < len(RETRY_SLEEP):
-                pass
-            else:
-                return None, last
-        except Exception as e:
-            last = (0, type(e).__name__ + ": " + str(e)[:120])
-            if attempt >= len(RETRY_SLEEP):
-                return None, last
-        finally:
-            _ungate()
-        wait = RETRY_SLEEP[attempt]
-        if time.time() - t_start + wait > RETRY_BUDGET:
-            return None, last          # stop burning the client's patience
-        time.sleep(wait)
-    return None, last
 
 CANDIDATES = [
     {"name": "antigravity",
@@ -447,16 +388,91 @@ def to_parts(content):
     return parts
 
 
+def to_tools(body):
+    """OpenAI tools[] -> Gemini functionDeclarations."""
+    tools = body.get("tools")
+    if not isinstance(tools, list) or not tools:
+        return None
+    decls = []
+    for t in tools:
+        if not isinstance(t, dict):
+            continue
+        fn = t.get("function") if t.get("type", "function") == "function" else None
+        if not isinstance(fn, dict):
+            fn = t if "name" in t else None
+        if not isinstance(fn, dict) or not fn.get("name"):
+            continue
+        d = {"name": str(fn.get("name"))[:64]}
+        if fn.get("description"):
+            d["description"] = str(fn["description"])[:1024]
+        params = fn.get("parameters")
+        if isinstance(params, dict):
+            params = {k: v for k, v in params.items() if k != "$schema"}
+            if "type" not in params:
+                params["type"] = "object"
+            d["parameters"] = params
+        decls.append(d)
+    if not decls:
+        return None
+    return [{"functionDeclarations": decls}]
+
+
+def to_toolconfig(body):
+    tc = body.get("tool_choice")
+    mode = None
+    if tc == "none":
+        mode = "NONE"
+    elif tc in ("required", "any"):
+        mode = "ANY"
+    elif isinstance(tc, dict) and (tc.get("function") or {}).get("name"):
+        return {"functionCallingConfig": {"mode": "ANY",
+                                         "allowedFunctionNames": [tc["function"]["name"]]}}
+    if mode is None:
+        return None
+    return {"functionCallingConfig": {"mode": mode}}
+
+
+def _args(v):
+    if isinstance(v, dict):
+        return v
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except Exception:
+            return {"value": v}
+    return {}
+
+
 def build_payload(model, proj, body):
     msgs = body.get("messages") or []
     sys_parts, contents = [], []
+    names = {}
+    for m in msgs:
+        if m.get("role") == "assistant":
+            for tc in (m.get("tool_calls") or []):
+                fn = tc.get("function") or {}
+                if tc.get("id") and fn.get("name"):
+                    names[tc["id"]] = fn["name"]
     for m in msgs:
         role = m.get("role", "user")
-        txt = to_parts(m.get("content", ""))
+        if role == "tool":
+            nm = names.get(m.get("tool_call_id")) or m.get("name") or "tool_result"
+            resp = {"result": m.get("content", "")}
+            if not isinstance(resp["result"], (str, int, float, bool, list, dict)):
+                resp["result"] = str(resp["result"])
+            contents.append({"role": "user", "parts": [{"functionResponse": {"name": nm,
+                                                                             "response": resp}}]})
+            continue
+        txt = to_parts(m.get("content"))
         if role in ("system", "developer"):
             sys_parts.extend(txt)
-        else:
-            contents.append({"role": "model" if role == "assistant" else "user", "parts": txt})
+            continue
+        for tc in (m.get("tool_calls") or []):
+            fn = tc.get("function") or {}
+            if not fn.get("name"):
+                continue
+            txt.append({"functionCall": {"name": fn["name"], "args": _args(fn.get("arguments"))}})
+        contents.append({"role": "model" if role == "assistant" else "user", "parts": txt})
     out = {"contents": contents}
     if sys_parts:
         out["systemInstruction"] = {"parts": sys_parts}
@@ -472,6 +488,12 @@ def build_payload(model, proj, body):
             gc[dst] = v
     if gc:
         out["generationConfig"] = gc
+    tl = to_tools(body)
+    if tl:
+        out["tools"] = tl
+        cfg = to_toolconfig(body)
+        if cfg:
+            out["toolConfig"] = cfg
     return {"model": model, "project": proj, "request": out}
 
 
@@ -484,24 +506,29 @@ def pick_text(payload):
         return ""
 
 
+def pick_toolcalls(payload):
+    try:
+        cand = (payload.get("candidates") or [])[0]
+        parts = cand.get("content", {}).get("parts") or []
+    except Exception:
+        return []
+    out, i = [], 0
+    for p in parts:
+        fc = p.get("functionCall")
+        if not isinstance(fc, dict) or not fc.get("name"):
+            continue
+        out.append({"index": i, "id": "call_%s_%d" % (int(time.time() * 1000), i),
+                    "type": "function",
+                    "function": {"name": fc["name"],
+                                 "arguments": json.dumps(fc.get("args") or {}, ensure_ascii=False)}})
+        i += 1
+    return out
+
+
 def unwrap(obj):
     if isinstance(obj, dict) and isinstance(obj.get("response"), dict):
         return obj["response"]
     return obj
-
-
-REC = []
-REC_MAX = 240
-REC_LOCK = threading.Lock()
-
-
-def _rec(d):
-    """ring buffer of request outcomes so phone-side failures can be read remotely"""
-    d["t"] = time.strftime("%H:%M:%SZ", time.gmtime())
-    with REC_LOCK:
-        REC.append(d)
-        if len(REC) > REC_MAX:
-            del REC[0:len(REC) - REC_MAX]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -519,24 +546,6 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
 
     def _send(self, code, obj, extra=None):
-        ctx = getattr(self, "_ctx", None)
-        if ctx is not None:
-            msg = ""
-            if isinstance(obj, dict):
-                e = obj.get("error")
-                if isinstance(e, dict):
-                    msg = str(e.get("message", ""))[:150]
-                elif isinstance(e, str):
-                    msg = e[:150]
-                if obj.get("tried"):
-                    ctx["tried"] = list(obj["tried"])[:4]
-            rec = {"path": ctx.get("path"), "model": ctx.get("model"),
-                   "code": code, "ms": int(1000 * (time.time() - ctx.get("t0", time.time()))),
-                   "ua": (self.headers.get("User-Agent") or "")[:60], "err": msg}
-            if ctx.get("tried"):
-                rec["tried"] = ctx["tried"]
-            _rec(rec)
-            self._ctx = None
         body = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -567,7 +576,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = urllib.parse.urlparse(self.path).path
-        self._ctx = {"path": p, "model": "", "t0": time.time()} if p in ("/healthz", "/v1/models") else None
         if p in ("/", "/healthz"):
             return self._send(200, {"ok": True, "service": "gemini-relay",
                                     "model": CFG["default_model"], "client": _TOK["client"]})
@@ -626,10 +634,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, out)
             except Exception as e:
                 return self._send(500, {"error": str(e)[:200]})
-        if p == "/__rec":
-            with REC_LOCK:
-                items = list(REC)[-140:]
-            return self._send(200, {"count": len(items), "items": items})
         if p == "/__mx":
             try:
                 tok = resolve_client()
@@ -657,17 +661,15 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/v1/models":
             if not self._authed():
                 return self._send(401, {"error": {"message": "invalid api key", "type": "invalid_request_error"}})
-            return self._send(200, {"object": "list", "data": [
-                {"id": CFG["default_model"], "object": "model", "owned_by": "google"}]})
+            data = [{"id": m, "object": "model", "owned_by": "google",
+                     "created": 1700000000} for m in MODEL_IDS]
+            return self._send(200, {"object": "list", "data": data})
         return self._send(404, {"error": {"message": "not found"}})
 
     def do_POST(self):
         p = urllib.parse.urlparse(self.path).path
-        self._ctx = {"path": p, "model": "", "t0": time.time()}
-        # tolerate base-URL doubling (/v1/v1/...) and trailing slashes from mobile clients
-        if not p.rstrip("/").lower().endswith("/chat/completions"):
-            return self._send(404, {"error": {"message": "unknown path " + p,
-                                              "hint": "use /v1/chat/completions"}})
+        if p != "/v1/chat/completions":
+            return self._send(404, {"error": {"message": "not found"}})
         if not self._authed():
             return self._send(401, {"error": {"message": "invalid api key", "type": "invalid_request_error"}})
         try:
@@ -678,44 +680,46 @@ class Handler(BaseHTTPRequestHandler):
         model = body.get("model") or CFG["default_model"]
         if model.startswith("gemini/"):
             model = model.split("/", 1)[1]
-        self._ctx["model"] = model
-        self._ctx["stream"] = bool(body.get("stream"))
         try:
             token = resolve_client()
             proj = project(token)
             if body.get("stream"):
                 return self._stream(token, proj, body, model)
-            chain = model_chain(model)
+            chain = [model] + [m for m in FALLBACK if m != model]
             last = (0, "")
             for m in chain:
-                resp, last = upstream_call(GEN_PATH, build_payload(m, proj, body), token)
-                if resp is None:
-                    if last[0] == 429:
-                        _cool_down(m)
-                    if last[0] in SOFT:
+                payload = build_payload(m, proj, body)
+                try:
+                    resp = _http(CFG["upstream"] + GEN_PATH, data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "Authorization": "Bearer " + token}, timeout=180)
+                except urllib.error.HTTPError as e:
+                    last = (e.code, e.read().decode("utf-8", "replace"))
+                    if e.code in SOFT:
                         continue
                     break
                 j = unwrap(_json_or_text(resp))
                 text = pick_text(j)
+                tcs = pick_toolcalls(j)
+                msg = {"role": "assistant", "content": text}
+                if tcs:
+                    msg["tool_calls"] = tcs
+                    if not text:
+                        msg["content"] = None
                 um = j.get("usageMetadata") or {}
                 return self._send(200, {
                     "id": "chatcmpl-" + str(int(time.time())),
                     "object": "chat.completion", "created": int(time.time()),
                     "model": m,
-                    "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
-                                 "finish_reason": "stop"}],
+                    "choices": [{"index": 0, "message": msg,
+                                 "finish_reason": "tool_calls" if tcs else "stop"}],
                     "usage": {"prompt_tokens": um.get("promptTokenCount", 0),
                               "completion_tokens": um.get("candidatesTokenCount", 0),
                               "total_tokens": um.get("totalTokenCount", 0)},
                 })
-            # Quota exhaustion is retryable, not a broken gateway: surface 429 so
-            # the client waits instead of treating the endpoint as dead.
-            code = last[0] if last[0] in (401, 403, 429, 503) else 502
-            return self._send(code, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:400]),
-                                              "type": "rate_limited" if code == 429 else "upstream_error",
-                                              "code": code},
-                                    "tried": chain},
-                              extra={"Retry-After": "5"} if code == 429 else None)
+            return self._send(502, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:400]),
+                                              "type": "upstream_error"},
+                                    "tried": chain})
         except urllib.error.HTTPError as e:
             d = e.read().decode("utf-8", "replace")
             return self._send(502, {"error": {"message": "upstream %s: %s" % (e.code, d[:400]),
@@ -724,86 +728,48 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(502, {"error": {"message": str(e)[:400], "type": "gateway_error"}})
 
     def _stream(self, token, proj, body, model):
-        # Commit to SSE immediately: mobile clients abort on "no bytes yet", and the
-        # upstream can hold its first token for several seconds on slow models.
         cid = "chatcmpl-" + str(int(time.time()))
-        chain = model_chain(model)
-        ctx = getattr(self, "_ctx", None) or {}
-        self._ctx = None
-        sctx = {"path": ctx.get("path"), "model": model, "t0": ctx.get("t0", time.time()),
-                "ua": (self.headers.get("User-Agent") or "")[:60]}
-        used = model
+        chain = [model] + [m for m in FALLBACK if m != model]
+        resp, last, used = None, (0, ""), model
+        for m in chain:
+            payload = build_payload(m, proj, body)
+            try:
+                resp = _http(CFG["upstream"] + STREAM_PATH, data=json.dumps(payload).encode(),
+                             headers={"Content-Type": "application/json",
+                                      "Accept": "text/event-stream",
+                                      "Authorization": "Bearer " + token}, timeout=180)
+                used = m
+                break
+            except urllib.error.HTTPError as e:
+                last = (e.code, e.read().decode("utf-8", "replace"))
+                if e.code in SOFT:
+                    continue
+                break
+        if resp is None:
+            return self._send(502, {"error": {"message": "upstream %s: %s" % (last[0], last[1][:300]),
+                                              "type": "upstream_error"},
+                                    "tried": chain})
+        model = used
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache, no-transform")
-        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "close")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.close_connection = True
 
-        wlock = threading.Lock()
-
         def emit(obj):
-            with wlock:
-                self.wfile.write(("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode())
-                self.wfile.flush()
+            self.wfile.write(("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode())
+            self.wfile.flush()
 
         def chunk(delta, finish=None):
             return {"id": cid, "object": "chat.completion.chunk", "created": int(time.time()),
-                    "model": used,
+                    "model": model,
                     "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
 
-        # first byte now (~0.1s), well before upstream answers
         try:
             emit(chunk({"role": "assistant", "content": ""}))
-        except Exception:
-            return _rec({"path": sctx.get("path"), "model": model, "code": 499, "stream": True,
-                         "ms": int(1000 * (time.time() - sctx.get("t0")), ), "ua": sctx.get("ua"),
-                         "err": "client gone before first byte"})
-
-        # keep bytes flowing while upstream thinks, so mobile stacks do not time out on silence
-        hb_stop = threading.Event()
-
-        def heartbeat():
-            while not hb_stop.wait(3.0):
-                try:
-                    emit(chunk({"content": ""}))
-                except Exception:
-                    return
-
-        threading.Thread(target=heartbeat, daemon=True).start()
-
-        resp, last = None, (0, "")
-        for m in chain:
-            resp, last = upstream_call(STREAM_PATH, build_payload(m, proj, body), token,
-                                       accept="text/event-stream")
-            if resp is None:
-                if last[0] == 429:
-                    _cool_down(m)
-                if last[0] in SOFT:
-                    continue
-                break
-            used = m
-            break
-
-        if resp is None:
-            # headers already sent -> report the failure in-band instead of a 502
-            hint = ("[relay-retry] 上游配额用尽（429），等几秒再发一次即可" if last[0] == 429
-                    else "[relay-error] upstream %s %s" % (last[0], last[1][:160]))
-            try:
-                emit(chunk({"content": hint}))
-                emit(chunk({}, "stop"))
-                self.wfile.write(b"data: [DONE]\n\n")
-                self.wfile.flush()
-            except Exception:
-                pass
-            return _rec({"path": sctx.get("path"), "model": model, "code": 502, "stream": True,
-                         "ms": int(1000 * (time.time() - sctx.get("t0"))), "ua": sctx.get("ua"),
-                         "err": ("upstream %s %s" % (last[0], last[1][:150])),
-                         "tried": chain})
-
-        try:
+            said, called = False, False
             for raw in resp:
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
@@ -817,8 +783,12 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 t = pick_text(j)
                 if t:
+                    said = True
                     emit(chunk({"content": t}))
-            emit(chunk({}, "stop"))
+                for tc in pick_toolcalls(j):
+                    called = True
+                    emit(chunk({"tool_calls": [tc]}))
+            emit(chunk({}, "tool_calls" if called else "stop"))
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         except Exception as e:
@@ -827,14 +797,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         finally:
-            hb_stop.set()
             try:
                 resp.close()
             except Exception:
                 pass
-            _rec({"path": sctx.get("path"), "model": used, "code": 200, "stream": True,
-                  "ms": int(1000 * (time.time() - sctx.get("t0", time.time()))),
-                  "ua": sctx.get("ua"), "err": "" if used == model else "fallback->" + used})
 
     def diag(self):
         out = {"ok": False, "attempts": [], "steps": {}, "config": {
