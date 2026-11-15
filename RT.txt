@@ -19,76 +19,83 @@
      "v": 0,
      "meta": "{'ideType': 'ANTIGRAVITY'}",
      "code": 200,
-     "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
-    },
-    {
-     "v": 1,
-     "meta": "OMIT_KEY",
-     "code": 200,
-     "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
-    },
-    {
-     "v": 2,
-     "meta": "{'pluginType': 'GEMINI_CLI'}",
-     "code": 400,
-     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�J\u00031\u0010��W�\\�Pb\u0005O����@w�R{��\f�q\td�5�\u0016�쿛�ۺ�x���{�y�e�\u0019!\u0014�5�ޓc\u0000\u0001VF`@w���D4�\u001cԑ�\\\u001f@I"
-    },
-    {
-     "v": 3,
-     "meta": "{'pluginType': 'GEMINI_CLI', 'ideType': ",
-     "code": 400,
-     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�J\u00031\u0010��W�\\�Pb\u0005O����@w�R{��\f�q\td�5�\u0016�쿛�ۺ�x���{�y�e�\u0019!\u0014�5�ޓc\u0000\u0001VF`@w���D4�\u001cԑ�\\\u001f@I"
-    },
-    {
-     "v": 4,
-     "meta": "{'pluginType': 'ANTIGRAVITY'}",
-     "code": 400,
-     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�J�0\u0014}�W��La�\t>�du2\n�H�\u0005q2.�]\t�IMҁ���I��\n�/�9'��sr\u000f\t!\u0014�цޒ�\u0007\u001e֚�G7���H�h-4���ڃ\u0014�"
-    },
-    {
-     "v": 5,
-     "meta": "{'ideType': 'ANTIGRAVITY', 'pluginType':",
-     "code": 400,
-     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��PAj�0\u0010��\u0015B��\u0010�\u0014z�i�\u0016CcB��\u0014�X[#�%W�\u0003%��\u001c'u����V3ڝ\u0019�1\"��1��\u0007r���Bs��~:\u001d��\n��2p4U\u0007"
-    },
-    {
-     "v": 6,
-     "meta": "{}",
-     "code": 200,
-     "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+     "b": ""
     }
    ],
-   "meta_used": 6,
-   "project": "",
-   "currentTier": null,
-   "paidTier": null,
-   "allowedTiers": [],
-   "onb_standard-tier": {
-    "code": 200,
-    "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+   "meta_used": 0,
+   "project": "aicode-consumers",
+   "currentTier": {
+    "id": "free-tier",
+    "name": "Antigravity",
+    "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+    "privacyNotice": {
+     "showNotice": true,
+     "noticeText": "This notice and our Privacy Policy - https://policies.google.com/privacy - describe how Gemini Code Assist for individuals handles your data. Please read them carefully.\n\nWhen you use Gemini Code Assist for individuals, Google collects your prompts, related code, generated output, code edits, related feature usage information, and your feedback to provide, improve, and develop Google products and services and machine learning technologies.\n\nTo help with quality and improve our products (such as generative machine-learning models), human reviewers may read, annotate, and process the data collected above. We take steps to protect your privacy as part of this process. This includes disconnecting the data from your Google Account before reviewers see or annotate it, and storing those disconnected copies for up to 18 months. Please don't submit confidential information or any data you wouldn't want a reviewer to see or Google to use to improve our products, services, and machine-learning technologies.\n\nIf you don't want this data used to improve Google's machine learning models, you can opt out below."
+    },
+    "upgradeSubscriptionUri": "https://accounts.google.com/AccountChooser?Email=mahabubbashah820%40gmail.com&continue=https%3A%2F%2Fone.google.com%2Fai",
+    "upgradeSubscriptionText": "Upgrade to get 1,500 model requests per day with Gemini CLI and Gemini Code Assist's agent mode with Google AI Pro.",
+    "upgradeSubscriptionType": "GOOGLE_ONE"
    },
-   "onb_free-tier": {
-    "code": 200,
-    "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+   "paidTier": {
+    "id": "g1-pro-tier",
+    "name": "Google AI Pro",
+    "description": "Google AI Pro",
+    "upgradeSubscriptionUri": "https://antigravity.google/g1-upgrade",
+    "upgradeSubscriptionText": "You can upgrade to a Google AI Ultra plan to receive higher rate limits.",
+    "availableCredits": [
+     {
+      "creditType": "GOOGLE_ONE_AI",
+      "minimumCreditAmountForUsage": "50"
+     }
+    ]
    },
-   "onb_legacy-tier": {
+   "allowedTiers": [
+    "free-tier",
+    "standard-tier"
+   ],
+   "fetchAvailableModels": {
     "code": 200,
-    "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
-   },
-   "lca_after_onb_code": 200,
-   "after_onb": {
-    "currentTier": null,
-    "paidTier": null,
-    "project": "",
-    "allowedTiers": []
+    "models": [
+     "gemini-3.8-flash-tiered",
+     "gemini-4-hydrogen-xhigh",
+     "gemini-4-hydrogen-high",
+     "gemini-3.1-flash-lite",
+     "claude-sonnet-5-5-medium",
+     "claude-sonnet-5-5-high",
+     "gemini-2.5-pro",
+     "gemini-4-argon-low",
+     "gemini-4-argon-high",
+     "gemini-3.8-flash-medium",
+     "gemini-4-hydrogen-medium",
+     "gemini-4-argon-medium",
+     "gemini-3-flash",
+     "gemini-3.8-flash-low",
+     "claude-sonnet-5-5-low",
+     "claude-opus-5-5-high",
+     "gemini-4-carbon-disabled",
+     "claude-opus-5-5-medium",
+     "tab_jump_flash_lite_preview",
+     "gemini-4-hydrogen-low",
+     "chat_20706",
+     "gemini-2.5-flash-thinking",
+     "tab_flash_lite_preview",
+     "claude-opus-5-5-low",
+     "chat_23310",
+     "gemini-3.8-flash-high",
+     "gemini-2.5-flash-lite",
+     "gpt-oss-120b-medium",
+     "gemini-3.1-flash-image",
+     "gemini-3.5-flash-lite",
+     "gemini-2.5-flash"
+    ]
    },
    "gen_gemini-2.5-flash": {
     "code": 200,
-    "text": ""
+    "text": "PONG"
    },
    "gen_gemini-2.5-pro": {
     "code": 429,
-    "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�N�0\u0014}�+\u001a�G\u0005\u0006s��ő�Yd,q\u001acn��5�\u0014ۢ�e�.e87\u0017_|j������E��R\niOȶ\u001d�1\u0015\u0019�S�_\r�\u0000G� 7��\u00125��;\u0012��@�4f�\u0011�$)T�2�\u0010Q\u0012�a�������Y��B\u0003�`EA$*�\u0004�\u001a%�C>\u001c)j�.J���1���|\u0019�D����t�H��7'C\r�0��\u000e }�ny��"
+    "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��PMO�@\u0014��+6�\u000b\u0002�Zz��$z0��&Vc�\u000b��MX\u0016�C%M��,���x��������\"�F!��'d�\u000e��\u001c�)\f��\u001e`(%\u0014\u0006�W\\�\r�#��\rh�0'\rׂdPCFUCxEԆJ��GJ����Ms\u0005䃖%\u0011(Q\u0011X+\u0014��٥']�w�\n���$�\u0017�er\u0013�Ə���\"�gߜ\u001c\u0015�Ґ�;�����j�.�9݂�D"
    },
    "gen_gemini-3-pro": {
     "code": 404,
@@ -114,10 +121,5 @@
  "same_account": true,
  "matches_expected_account": true,
  "config_matches_expected_account": true,
- "raw": {
-  "onb_standard-tier": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002�=M�\n� \f��\u0014�s���`c�\u0007p\u001a��&\u0012�0J�}�e=���/Jk\u0013\b�\\u�\u0006�`��\t�pKǝ��o\u0016h�ۑhL�r,��tޡ�X��%�\u0013�Е\u0000v�\u001c�\u001d��8�\n���?��[��ޕ\u001dF�\u0007�\u0007|=�%\u0006Y\u0017O����6\u0001\u0017�ɫ�[�\u000f���m�\u0000\u0000\u0000",
-  "onb_free-tier": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002�=M�\n� \f��\u0014�s���`c�\u0007p\u001a��&\u0012�0J�}�e=���/Jk\u0013\b�\\u�\u0006�`��\t�pKǝ��o\u0016h�ۑhL�r,��tޡ�X��%�\u0013�Е\u0000v�\u001c�\u001d��8�\n���?��[��ޕ\u001dF�\u0007�\u0007|=�%\u0006Y\u0017O����6\u0001\u0017�ɫ�[�\u000f���m�\u0000\u0000\u0000",
-  "onb_legacy-tier": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002�=M�\n� \f��\u0014�s���`c�\u0007p\u001a��&\u0012�0J�}�e=���/Jk\u0013\b�\\u�\u0006�`��\t�pKǝ��o\u0016h�ۑhL�r,��tޡ�X��%�\u0013�Е\u0000v�\u001c�\u001d��8�\n���?��[��ޕ\u001dF�\u0007�\u0007|=�%\u0006Y\u0017O����6\u0001\u0017�ɫ�[�\u000f���m�\u0000\u0000\u0000",
-  "lca_after_onb": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��Wkk\u001bG\u0014��_1\bܴ �v�@\b�\"\u001c�\u0018��P�P�\u0010F�W����l�!E\u0004���;��^Ǐ\u0006Z��`,i��}�{��ٯ{BL��\u001c��T�&/�W,aQ��>Y;�Y��i^6�!�X��*'7*����|�T\u001b�5lqJ�2j��-9*EaK\u0012>V\u0015y��B\u001a,�2\beD\u0013uP�&q�����Z�6�ؽ�A\u00154$�\r_���\u001a\\�i�c�꒾\u0004�`Y+/�R�f�\u0013\u0017٩��Z�c&�\u0010Z����\u0005E~^Y[i�\u0017�9�2�U�mE\u0002�E�L\u001csE\u000b�\u000fbm\u001d�(�F�Qj/j���Ŏc�2ȹ��$=\tG�\u0014��F\u0014��:j���7�ͻ�\f��\b��0\u0015�)O�5\u0015�\u000b�:۴\u0001���\f\u001d�SQ�!�~�\u0018�\u0018��\u001dT���d�����\b�\u0010��ܬi�/\u0005X\u0013�+Y|\u0012�r0d\u0003��ᯔ�Jڐ�m�\u001fv����'�A7�F\u0016�2$��3�T\"PQ\u001b�m�m`L�VԤ[�U�\u0016�Q6ؖ�v\u0001EWr\u000e�E-��U0�b̆\u0018\r������c#\rJ�(\u0002A=,w�7\\\u00048\u0003@r9p��=�,5�\u0007\u001cx�\u0015r��w$��\u0004r\u0007j}�\u000bJ\t}G2��W+]\u0010v\rW�e�w.\u0012K�)t\u0004�D�|a���H\u001ft��f\u001d�����\u0004�\"t�Fux\u0002,n(B�������҂`�a\u0012GZ �\u0018\u0016[.��9p2��\u0003kKk�\u0004<��F\u0005؛5�\u000e\u0005�zL�\u001cw�3f*om�%\u001f�J�*�,9F�gW\u000e\u0016������Ӂ8�1sf�3�l�\u0012�i��\t��\u0019\u0002��H9�'�6!3Y��U\u0001��6�\u0003\u0004е��'Iu�:��-䰤��jP�K�X�z���e7\u0014�k�qm�\u0015��I#�~��Z��j%}-��O\u000f�9�x�O�\u0000�A�H/����\u0017�O_��\u001a\u001a�łT��3�\u0015�2o1\u001a\u0015\u0005q4}vx��F�>GH5�J�`��\u0010����,5�N\u0001F�\u0007�f/ݙ��g\u0010_;(�]�f����雓��oO\u0018�\u0004�Dj@N%�(\u000f�?��a\"�=�\u001e\u001cW���z`d=4�\u001e����z\u001c[�c��\u001d[��b���h-�h�2���7\u0012�\u0003\n���\u00172{i�B;�C��ʤ\u0014\\lz`�<��t$!�����˺�\u000b@\u001c\u0012G�屶��\n��J�8\u00184�$߾\u001eܒ竱3Z�K�o���\u001f��)�0�Ւf���\r��t�*�ߤ�\"1nkH_J�;�\t�,C2���\\��JU���V\u001d���;��n\f�������{�uӻ�\u000f��8�/!t4�ח\u00119�4\\��h5,�� V�ZU5�H�\u000e\"��\u000f7\u000b��]I�4\u001d�4)��\u0018��\"m޾r|\\�MF�����&�Z4,^����Q��\u001d\u000e�S���\u0017�����\u0001\u0007��SX\u000f\u0000\u0000"
- }
+ "raw": {}
 }
