@@ -19,75 +19,80 @@
      "v": 0,
      "meta": "{'ideType': 'ANTIGRAVITY'}",
      "code": 200,
-     "b": ""
+     "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
     },
     {
      "v": 1,
      "meta": "OMIT_KEY",
      "code": 200,
-     "b": ""
+     "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
     },
     {
      "v": 2,
      "meta": "{'pluginType': 'GEMINI_CLI'}",
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
+     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�J\u00031\u0010��W�\\�Pb\u0005O����@w�R{��\f�q\td�5�\u0016�쿛�ۺ�x���{�y�e�\u0019!\u0014�5�ޓc\u0000\u0001VF`@w���D4�\u001cԑ�\\\u001f@I"
     },
     {
      "v": 3,
      "meta": "{'pluginType': 'GEMINI_CLI', 'ideType': ",
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
+     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�J\u00031\u0010��W�\\�Pb\u0005O����@w�R{��\f�q\td�5�\u0016�쿛�ۺ�x���{�y�e�\u0019!\u0014�5�ޓc\u0000\u0001VF`@w���D4�\u001cԑ�\\\u001f@I"
     },
     {
      "v": 4,
      "meta": "{'pluginType': 'ANTIGRAVITY'}",
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
+     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�J�0\u0014}�W��La�\t>�du2\n�H�\u0005q2.�]\t�IMҁ���I��\n�/�9'��sr\u000f\t!\u0014�цޒ�\u0007\u001e֚�G7���H�h-4���ڃ\u0014�"
     },
     {
      "v": 5,
      "meta": "{'ideType': 'ANTIGRAVITY', 'pluginType':",
      "code": 400,
-     "b": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid value at 'metadata.plugin_type' (t"
+     "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��PAj�0\u0010��\u0015B��\u0010�\u0014z�i�\u0016CcB��\u0014�X[#�%W�\u0003%��\u001c'u����V3ڝ\u0019�1\"��1��\u0007r���Bs��~:\u001d��\n��2p4U\u0007"
     },
     {
      "v": 6,
      "meta": "{}",
      "code": 200,
-     "b": ""
+     "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
     }
    ],
    "meta_used": 6,
    "project": "",
    "currentTier": null,
    "paidTier": null,
-   "allowedTiers": [
-    "standard-tier"
-   ],
+   "allowedTiers": [],
    "onb_standard-tier": {
     "code": 200,
-    "b": ""
+    "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
    },
    "onb_free-tier": {
-    "code": 403,
-    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"This client is no longer supported for Gem"
+    "code": 200,
+    "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
    },
    "onb_legacy-tier": {
     "code": 200,
-    "b": ""
+    "b": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+   },
+   "lca_after_onb_code": 200,
+   "after_onb": {
+    "currentTier": null,
+    "paidTier": null,
+    "project": "",
+    "allowedTiers": []
    },
    "gen_gemini-2.5-flash": {
-    "code": 403,
-    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you are not an enterpris"
+    "code": 200,
+    "text": ""
    },
    "gen_gemini-2.5-pro": {
-    "code": 403,
-    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you are not an enterpris"
+    "code": 429,
+    "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��P�N�0\u0014}�+\u001a�G\u0005\u0006s��ő�Yd,q\u001acn��5�\u0014ۢ�e�.e87\u0017_|j������E��R\niOȶ\u001d�1\u0015\u0019�S�_\r�\u0000G� 7��\u00125��;\u0012��@�4f�\u0011�$)T�2�\u0010Q\u0012�a�������Y��B\u0003�`EA$*�\u0004�\u001a%�C>\u001c)j�.J���1���|\u0019�D����t�H��7'C\r�0��\u000e }�ny��"
    },
    "gen_gemini-3-pro": {
-    "code": 403,
-    "b": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"You do not have a valid license of this product. Please contact your administrator to request a license. If you are not an enterpris"
+    "code": 404,
+    "b": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002�-�1\n�0\f\u0000��\"d\u0016qpr\u0016G\u0005�Y���`�M����Vt�;�V\u0000H�;�\u0015�\t\u0012��P��(�O�Ĭ��aOG \u00162@V6���\f�\t,.X���h\t�\u000em7LM7�5�\u0012UT\u000f��\u0005r\u0000\u0000\u0000"
    }
   }
  },
@@ -108,5 +113,11 @@
  },
  "same_account": true,
  "matches_expected_account": true,
- "config_matches_expected_account": true
+ "config_matches_expected_account": true,
+ "raw": {
+  "onb_standard-tier": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002�=M�\n� \f��\u0014�s���`c�\u0007p\u001a��&\u0012�0J�}�e=���/Jk\u0013\b�\\u�\u0006�`��\t�pKǝ��o\u0016h�ۑhL�r,��tޡ�X��%�\u0013�Е\u0000v�\u001c�\u001d��8�\n���?��[��ޕ\u001dF�\u0007�\u0007|=�%\u0006Y\u0017O����6\u0001\u0017�ɫ�[�\u000f���m�\u0000\u0000\u0000",
+  "onb_free-tier": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002�=M�\n� \f��\u0014�s���`c�\u0007p\u001a��&\u0012�0J�}�e=���/Jk\u0013\b�\\u�\u0006�`��\t�pKǝ��o\u0016h�ۑhL�r,��tޡ�X��%�\u0013�Е\u0000v�\u001c�\u001d��8�\n���?��[��ޕ\u001dF�\u0007�\u0007|=�%\u0006Y\u0017O����6\u0001\u0017�ɫ�[�\u000f���m�\u0000\u0000\u0000",
+  "onb_legacy-tier": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002�=M�\n� \f��\u0014�s���`c�\u0007p\u001a��&\u0012�0J�}�e=���/Jk\u0013\b�\\u�\u0006�`��\t�pKǝ��o\u0016h�ۑhL�r,��tޡ�X��%�\u0013�Е\u0000v�\u001c�\u001d��8�\n���?��[��ޕ\u001dF�\u0007�\u0007|=�%\u0006Y\u0017O����6\u0001\u0017�ɫ�[�\u000f���m�\u0000\u0000\u0000",
+  "lca_after_onb": "\u001f�\b\u0000\u0000\u0000\u0000\u0000\u0002��Wkk\u001bG\u0014��_1\bܴ �v�@\b�\"\u001c�\u0018��P�P�\u0010F�W����l�!E\u0004���;��^Ǐ\u0006Z��`,i��}�{��ٯ{BL��\u001c��T�&/�W,aQ��>Y;�Y��i^6�!�X��*'7*����|�T\u001b�5lqJ�2j��-9*EaK\u0012>V\u0015y��B\u001a,�2\beD\u0013uP�&q�����Z�6�ؽ�A\u00154$�\r_���\u001a\\�i�c�꒾\u0004�`Y+/�R�f�\u0013\u0017٩��Z�c&�\u0010Z����\u0005E~^Y[i�\u0017�9�2�U�mE\u0002�E�L\u001csE\u000b�\u000fbm\u001d�(�F�Qj/j���Ŏc�2ȹ��$=\tG�\u0014��F\u0014��:j���7�ͻ�\f��\b��0\u0015�)O�5\u0015�\u000b�:۴\u0001���\f\u001d�SQ�!�~�\u0018�\u0018��\u001dT���d�����\b�\u0010��ܬi�/\u0005X\u0013�+Y|\u0012�r0d\u0003��ᯔ�Jڐ�m�\u001fv����'�A7�F\u0016�2$��3�T\"PQ\u001b�m�m`L�VԤ[�U�\u0016�Q6ؖ�v\u0001EWr\u000e�E-��U0�b̆\u0018\r������c#\rJ�(\u0002A=,w�7\\\u00048\u0003@r9p��=�,5�\u0007\u001cx�\u0015r��w$��\u0004r\u0007j}�\u000bJ\t}G2��W+]\u0010v\rW�e�w.\u0012K�)t\u0004�D�|a���H\u001ft��f\u001d�����\u0004�\"t�Fux\u0002,n(B�������҂`�a\u0012GZ �\u0018\u0016[.��9p2��\u0003kKk�\u0004<��F\u0005؛5�\u000e\u0005�zL�\u001cw�3f*om�%\u001f�J�*�,9F�gW\u000e\u0016������Ӂ8�1sf�3�l�\u0012�i��\t��\u0019\u0002��H9�'�6!3Y��U\u0001��6�\u0003\u0004е��'Iu�:��-䰤��jP�K�X�z���e7\u0014�k�qm�\u0015��I#�~��Z��j%}-��O\u000f�9�x�O�\u0000�A�H/����\u0017�O_��\u001a\u001a�łT��3�\u0015�2o1\u001a\u0015\u0005q4}vx��F�>GH5�J�`��\u0010����,5�N\u0001F�\u0007�f/ݙ��g\u0010_;(�]�f����雓��oO\u0018�\u0004�Dj@N%�(\u000f�?��a\"�=�\u001e\u001cW���z`d=4�\u001e����z\u001c[�c��\u001d[��b���h-�h�2���7\u0012�\u0003\n���\u00172{i�B;�C��ʤ\u0014\\lz`�<��t$!�����˺�\u000b@\u001c\u0012G�屶��\n��J�8\u00184�$߾\u001eܒ竱3Z�K�o���\u001f��)�0�Ւf���\r��t�*�ߤ�\"1nkH_J�;�\t�,C2���\\��JU���V\u001d���;��n\f�������{�uӻ�\u000f��8�/!t4�ח\u00119�4\\��h5,�� V�ZU5�H�\u000e\"��\u000f7\u000b��]I�4\u001d�4)��\u0018��\"m޾r|\\�MF�����&�Z4,^����Q��\u001d\u000e�S���\u0017�����\u0001\u0007��SX\u000f\u0000\u0000"
+ }
 }
