@@ -63,6 +63,31 @@ def _ungate():
         pass
 
 
+# Per-model cool-down: a model that just returned 429 stays quarantined briefly so
+# one client retry storm cannot walk the whole fallback chain for 4x the latency.
+COOL_SEC = float(os.environ.get("QCOOL") or 45.0)
+_cool = {}
+_cool_lock = threading.Lock()
+
+
+def _cool_down(m):
+    with _cool_lock:
+        _cool[m] = time.time() + COOL_SEC
+
+
+def _quarantined(m):
+    with _cool_lock:
+        return _cool.get(m, 0.0) > time.time()
+
+
+def model_chain(model):
+    """Requested model first, then fallbacks, skipping quarantined ones."""
+    rest = [m for m in FALLBACK if m != model]
+    live = [m for m in rest if not _quarantined(m)]
+    cold = [m for m in rest if _quarantined(m)]
+    return [model] + live + cold
+
+
 def upstream_call(path, payload, token, accept=None, timeout=180):
     """POST to upstream with quota throttling + 429 retry. Returns (resp, (code, body))."""
     hd = {"Content-Type": "application/json", "Authorization": "Bearer " + token}
@@ -660,11 +685,13 @@ class Handler(BaseHTTPRequestHandler):
             proj = project(token)
             if body.get("stream"):
                 return self._stream(token, proj, body, model)
-            chain = [model] + [m for m in FALLBACK if m != model]
+            chain = model_chain(model)
             last = (0, "")
             for m in chain:
                 resp, last = upstream_call(GEN_PATH, build_payload(m, proj, body), token)
                 if resp is None:
+                    if last[0] == 429:
+                        _cool_down(m)
                     if last[0] in SOFT:
                         continue
                     break
@@ -700,7 +727,7 @@ class Handler(BaseHTTPRequestHandler):
         # Commit to SSE immediately: mobile clients abort on "no bytes yet", and the
         # upstream can hold its first token for several seconds on slow models.
         cid = "chatcmpl-" + str(int(time.time()))
-        chain = [model] + [m for m in FALLBACK if m != model]
+        chain = model_chain(model)
         ctx = getattr(self, "_ctx", None) or {}
         self._ctx = None
         sctx = {"path": ctx.get("path"), "model": model, "t0": ctx.get("t0", time.time()),
@@ -752,6 +779,8 @@ class Handler(BaseHTTPRequestHandler):
             resp, last = upstream_call(STREAM_PATH, build_payload(m, proj, body), token,
                                        accept="text/event-stream")
             if resp is None:
+                if last[0] == 429:
+                    _cool_down(m)
                 if last[0] in SOFT:
                     continue
                 break
