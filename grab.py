@@ -1,82 +1,50 @@
-import json, re, urllib.request, urllib.error
+import json, re, urllib.request, urllib.error, os, base64
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-SHORT = "https://forms.gle/hGzM9MEUv2azZsrb9"
-OUT = "APPEAL_RESULT.json"
+FORM = "https://docs.google.com/forms/d/e/1FAIpQLScOJWibQ_-hYuVv63kJTgEqlgAaOwRLGFTbXm-QY1gz8U0CGA/viewform"
 
-def fetch(url, timeout=45):
-    req = urllib.request.Request(url, headers={
-        "User-Agent": UA,
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-    })
-    try:
-        r = urllib.request.urlopen(req, timeout=timeout)
-        return r.getcode(), r.geturl(), r.read().decode("utf-8", "replace"), dict(r.headers)
-    except urllib.error.HTTPError as e:
-        body = ""
-        try:
-            body = e.read().decode("utf-8", "replace")
-        except Exception:
-            pass
-        return e.code, url, body, dict(e.headers or {})
-    except Exception as e:
-        return -1, url, "%s: %s" % (type(e).__name__, str(e)[:200]), {}
+req = urllib.request.Request(FORM, headers={"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"})
+body = urllib.request.urlopen(req, timeout=45).read().decode("utf-8", "replace")
 
-res = {}
-code, final, body, hdrs = fetch(SHORT)
-res["short_status"] = code
-res["final_url"] = final
-res["body_len"] = len(body)
+out = {}
+out["all_entries"] = sorted(set(re.findall(r"entry\.(\d{5,})", body)))
 
-forms = re.findall(r'action="([^"]*formResponse[^"]*)"', body)
-res["form_action"] = forms[0] if forms else None
-res["form_id"] = None
-m = re.search(r'/forms/d/e/([A-Za-z0-9_-]+)/', final or "")
-if m:
-    res["form_id"] = m.group(1)
-m2 = re.search(r'/forms/d/([A-Za-z0-9_-]+)/', final or "")
-if m2 and not res["form_id"]:
-    res["form_id"] = m2.group(1)
+b = re.search(r"FB_PUBLIC_LOAD_DATA_\s*=\s*(\[.*?\])\s*;?\s*</script>", body, re.S)
+raw = b.group(1)
+out["raw_len"] = len(raw)
+data = json.loads(raw)
 
-res["requires_login"] = ("accounts.google.com" in (final or "")) or ("ServiceLogin" in body)
-res["entries"] = sorted(set(re.findall(r'entry\.(\d{6,})', body)))
-res["is_closed"] = ("This form is no longer accepting responses" in body)
-res["title"] = None
-t = re.search(r'<title>(.*?)</title>', body, re.S)
-if t:
-    res["title"] = t.group(1).strip()[:300]
+def walk(node, depth=0, path="root"):
+    lines = []
+    if isinstance(node, list):
+        for i, v in enumerate(node):
+            if isinstance(v, (list, dict)):
+                lines += walk(v, depth + 1, "%s[%d]" % (path, i))
+            else:
+                s = str(v)
+                if len(s) > 200:
+                    s = s[:200] + "..."
+                lines.append("%s[%d] = %r" % (path, i, s))
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            lines.append("%s{%s} = %r" % (path, k, str(v)[:200]))
+    return lines
 
-# Try FB_PUBLIC_LOAD_DATA_ blob for structure
-blob = None
-b = re.search(r'FB_PUBLIC_LOAD_DATA_\s*=\s*(\[.*?\])\s*;?\s*</script>', body, re.S)
-if b:
-    raw = b.group(1)
-    res["load_data_len"] = len(raw)
-    try:
-        data = json.loads(raw)
-        items = data[1][1] if isinstance(data, list) and len(data) > 1 and data[1] and len(data[1]) > 1 else []
-        fields = []
-        for it in items or []:
-            try:
-                fields.append({
-                    "id": it[0],
-                    "title": it[1],
-                    "type": it[3],
-                    "required": bool(it[4]) if len(it) > 4 else None,
-                    "choices": [c[0] for c in (it[6] or []) if c] if len(it) > 6 and it[6] else [],
-                })
-            except Exception:
-                pass
-        res["fields"] = fields
-        res["form_name"] = data[1][8] if len(data[1]) > 8 else None
-    except Exception as e:
-        res["load_data_err"] = str(e)[:200]
+# structured item dump
+items = data[1][1]
+out["item_count"] = len(items) if items else 0
+out["items"] = []
+for it in items or []:
+    out["items"].append(it)
 
-if not res["entries"]:
-    res["snippet"] = re.sub(r"\s+", " ", body[:600])
+out["dump"] = walk(data)[:200]
+out["html_inputs"] = re.findall(r'<input[^>]*name="(entry\.\d+)"[^>]*>', body)[:40]
+out["choice_labels"] = re.findall(r'data-value="([^"]{1,120})"', body)[:40]
 
-with open(OUT, "w", encoding="utf-8") as f:
-    json.dump(res, f, ensure_ascii=False, indent=2)
-print(json.dumps(res, ensure_ascii=False, indent=2)[:4000])
+with open("APPEAL_DUMP.json", "w", encoding="utf-8") as f:
+    json.dump(out, f, ensure_ascii=False, indent=2)
+print(json.dumps(out["items"], ensure_ascii=False)[:3000])
+print("ENTRIES", out["all_entries"])
+print("INPUTS", out["html_inputs"])
+print("CHOICES", out["choice_labels"][:10])
