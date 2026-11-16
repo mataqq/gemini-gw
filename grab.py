@@ -1,68 +1,58 @@
-import json, re, urllib.request, urllib.error, urllib.parse, time
+import json, re, urllib.request, urllib.error, urllib.parse, time, http.cookiejar
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
 FORM_ID = "1FAIpQLScOJWibQ_-hYuVv63kJTgEqlgAaOwRLGFTbXm-QY1gz8U0CGA"
-VIEW = "https://docs.google.com/forms/d/e/%s/viewform?usp=send_form" % FORM_ID
+VIEW = "https://docs.google.com/forms/d/e/%s/viewform" % FORM_ID
 POST = "https://docs.google.com/forms/d/e/%s/formResponse" % FORM_ID
 ENTRY = "172966166"
 ANSWER = "Yes, I understand"
 
+jar = http.cookiejar.CookieJar()
+opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+opener.addheaders = [("User-Agent", UA), ("Accept-Language", "en-US,en;q=0.9")]
+
 out = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
-req = urllib.request.Request(VIEW, headers={
-    "User-Agent": UA, "Accept": "text/html,application/xhtml+xml",
-    "Accept-Language": "en-US,en;q=0.9"})
-r = urllib.request.urlopen(req, timeout=45)
+r = opener.open(urllib.request.Request(VIEW), timeout=45)
 html = r.read().decode("utf-8", "replace")
 out["view_status"] = r.getcode()
-out["cookies"] = r.headers.get_all("Set-Cookie") or []
+out["cookies_count"] = len(jar)
 
-fbzx = None
-m = re.search(r'name="fbzx"\s+value="(-?\d+)"', html)
-if m:
-    fbzx = m.group(1)
-if not fbzx:
-    m = re.search(r'\[\\?"fbzx\\?"\s*,\s*\\?"?(-?\d+)', html)
-    if m:
-        fbzx = m.group(1)
-if not fbzx:
-    m = re.search(r'fbzx[^0-9-]{0,20}(-?\d{10,})', html)
-    if m:
-        fbzx = m.group(1)
+def grab(name):
+    m = re.search(r'name="%s"\s+value="([^"]*)"' % name, html)
+    return m.group(1) if m else None
+
+fbzx = grab("fbzx")
+ts_field = grab("submissionTimestamp")
 out["fbzx"] = fbzx
-out["fbzx_near"] = [html[max(0, mm.start()-60):mm.start()+80].replace("\n"," ") for mm in list(re.finditer("fbzx", html))[:3]]
+out["submissionTimestamp"] = ts_field
 
-draft = None
-m = re.search(r'\[\\?"draftResponse\\?"\s*,\s*(\[.*?\])\s*\]', html)
-if not m:
-    m = re.search(r'name="draftResponse"\s+value="([^"]*)"', html)
-if m:
-    draft = m.group(1)
-out["has_draft"] = bool(draft)
-
-fields = {
-    "entry.%s" % ENTRY: ANSWER,
-    "fvv": "1",
-    "pageHistory": "0",
-    "draftResponse": draft if draft else "[]",
-}
+# capture the full hidden field set the page expects
+hidden = dict(re.findall(r'<input type="hidden" name="([^"]+)" value="([^"]*)"', html))
+fields = {}
+for k, v in hidden.items():
+    if k.startswith("entry.") and k != "entry.%s" % ENTRY:
+        continue
+    fields[k] = v
+fields["entry.%s" % ENTRY] = ANSWER
+fields["fvv"] = "1"
+fields["pageHistory"] = "0"
 if fbzx:
     fields["fbzx"] = fbzx
+out["hidden_keys"] = sorted(hidden.keys())
 
 payload = urllib.parse.urlencode(fields).encode()
-req2 = urllib.request.Request(POST, data=payload, method="POST", headers={
+req = urllib.request.Request(POST, data=payload, method="POST", headers={
     "User-Agent": UA,
     "Content-Type": "application/x-www-form-urlencoded",
     "Referer": VIEW,
     "Origin": "https://docs.google.com",
-    "Accept": "text/html,application/xhtml+xml",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Cache-Control": "max-age=0"})
+    "Accept": "text/html,application/xhtml+xml"})
 
 body = ""
 try:
-    r2 = urllib.request.urlopen(req2, timeout=45)
+    r2 = opener.open(req, timeout=45)
     out["post_status"] = r2.getcode(); out["post_final_url"] = r2.geturl()
     body = r2.read().decode("utf-8", "replace")
 except urllib.error.HTTPError as e:
@@ -82,8 +72,8 @@ out["markers"] = {
     "already": "already responded" in low,
     "notfound": "page not found" in low,
 }
-if out["post_status"] != 200 or not out["markers"]["thanks"]:
-    out["snippet"] = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body))[:400]
+if not out["markers"]["thanks"]:
+    out["snippet"] = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body))[:300]
 
 with open("APPEAL_SUBMIT.json", "w", encoding="utf-8") as f:
     json.dump(out, f, ensure_ascii=False, indent=2)
