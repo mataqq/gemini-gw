@@ -1,22 +1,19 @@
 {
-  "burst_shared_aicode": {
-    "codes": {
-      "503": 8
-    },
-    "sample_err": "{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"No capacity available for model gemini-2.5-pro on the server\",\n    \"status\": \"UNAVAILABLE\",\n    \"details\": [\n      {\n        \"@type\""
+  "rt_present": true,
+  "refresh_status": 200,
+  "access_token_len": 260,
+  "userinfo": {
+    "status": 200,
+    "email": "mahabubbashah820@gmail.com"
   },
-  "burst_fake_project": {
-    "codes": {
-      "429": 7,
-      "503": 1
-    },
-    "sample_err": "{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You have exhausted your capacity on this model. Your quota will reset after 4h51m22s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"det"
+  "generate_flash": {
+    "status": 403,
+    "body": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"This service has been disabled in this account for violation of Terms of Service. Please submit an appeal to continue using this product.\",\n    \"status\": \"PERMISSION_DENIED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"TOS_VIOLATION\",\n        \"domain\": \"cloudcode-pa.googleapis.com\",\n        \"metadata\": {\n          \"uiMessage\": \"true\",\n          \"appeal_url\": \"https://forms.gle/hGzM9MEUv2azZsrb9\",\n          \"appeal_url_link_text\": \"Submit Appeal\"\n        }\n      }\n    ]\n  }\n}\n"
   },
-  "burst_fake_project2": {
-    "codes": {
-      "429": 5,
-      "503": 3
-    },
-    "sample_err": "{\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You have exhausted your capacity on this model. Your quota will reset after 4h51m12s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"det"
-  }
+  "generate_pro": {
+    "status": 403,
+    "body": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"This service has been disabled in this account for violation of Terms of Service. Please submit an appeal to continue using this product.\",\n    \"status\": \"PERMISSION_DENIED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"TOS_VIOLATION\",\n        \"domain\": \"cloudcode-pa.googleapis.com\",\n        \"metadata\": {\n          \"uiMessage\": \"true\",\n          \"appeal_url\": \"https://forms.gle/hGzM9MEUv2azZsrb9\",\n          \"appeal_url_link_text\": \"Submit Appeal\"\n        }\n      }\n    ]\n  }\n}\n"
+  },
+  "verdict": "STILL_BANNED",
+  "checked_at": "2026-11-17T07:48:13Z"
 }
